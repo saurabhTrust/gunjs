@@ -1,0 +1,102 @@
+<!-- <!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Decentralized Messenger</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
+</head>
+
+<body>
+    <div id="app">
+        <h1>Decentralized Messenger</h1>
+        <div id="auth">
+            <button id="check">check</button>
+            <input type="text" id="username" placeholder="Enter Username">
+            <input type="password" id="password" placeholder="Enter Password" value="Guess@007000">
+            <small>Password must be at least 12 characters long and contain at least one lowercase letter, one uppercase
+                letter, one number, and one special character.</small>
+            <button id="login">Login</button>
+            <button id="register">Register</button>
+        </div>
+        <div id="chat" class="hidden">
+            <div id="messages"></div>
+            <input type="text" id="messageInput" placeholder="Type a message">
+            <button id="sendMessage">Send</button>
+            <div id="voiceCall">
+                <input type="text" id="callTo">
+                <button id="startVoice">Start Voice Call</button>
+                <button id="endVoice">End Voice Call</button>
+                <audio id="remoteAudio" autoplay></audio>
+                <button id="playButton">check</button>
+            </div>
+            <div id="videoCall">
+                <button id="startVideo">Start Video Call</button>
+                <button id="endVideo">End Video Call</button>
+                <video id="localVideo" autoplay muted></video>
+                <video id="remoteVideo" autoplay></video>
+            </div>
+        </div>
+    </div>
+    <script src="webrtc.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html> -->
+
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Decentralized End-to-End Messenger</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Gun.js via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+    <!-- SEA Module via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
+</head>
+
+<body>
+    <div id="app">
+        <h1>Decentralized End-to-End Messenger</h1>
+
+        <!-- Authentication Section -->
+        <div id="auth">
+            <input type="text" id="username" placeholder="Enter Username">
+            <input type="password" id="password" placeholder="Enter Password" value="Guess@007000">
+            <small>Password must be at least 12 characters long and contain at least one lowercase letter, one uppercase
+                letter, one number, and one special character.</small>
+            <button id="login">Login</button>
+            <button id="register">Register</button>
+        </div>
+
+        <!-- Chat Section -->
+        <div id="chat" class="hidden">
+            <!-- Contacts List -->
+            <div id="contacts">
+                <h2>Contacts</h2>
+                <div id="contactsList"></div>
+                <input type="text" id="newContactInput" placeholder="Enter username to add">
+                <button id="addContact">Add Contact</button>
+            </div>
+
+            <!-- Chat Room -->
+            <div id="chatRoom">
+                <h2 id="currentChatHeader">Select a contact to start chatting</h2>
+                <div id="messages"></div>
+                <div id="messageControls" class="hidden">
+                    <input type="text" id="messageInput" placeholder="Type a message">
+                    <button id="sendMessage">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+
+</html>

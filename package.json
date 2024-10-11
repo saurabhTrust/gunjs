@@ -1,0 +1,18 @@
+{
+  "name": "decentralized-messenger",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "generate": "node generateCerts.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.21.0",
+    "gun": "^0.2020.1240",
+    "node-forge": "^1.3.1"
+  }
+}
