@@ -178,6 +178,7 @@ function initializeApp() {
   if (user && user.is) {
     authDiv.classList.add('hidden');
     chatDiv.classList.remove('hidden');
+    chatDiv.style.display = "flex";
     loadContacts();
     setupContactRequestListener();
     setupContactAcceptanceListener(); 
