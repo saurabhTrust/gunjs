@@ -55,9 +55,7 @@
     <meta charset="UTF-8">
     <title>Decentralized End-to-End Messenger</title>
     <link rel="stylesheet" href="styles.css">
-    <!-- Gun.js via CDN -->
     <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
-    <!-- SEA Module via CDN -->
     <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
 </head>
 
@@ -65,7 +63,6 @@
     <div id="app">
         <h1>Decentralized End-to-End Messenger</h1>
 
-        <!-- Authentication Section -->
         <div id="auth">
             <input type="text" id="username" placeholder="Enter Username">
             <input type="password" id="password" placeholder="Enter Password" value="Guess@007000">
@@ -75,27 +72,43 @@
             <button id="register">Register</button>
         </div>
 
-        <!-- Chat Section -->
         <div id="chat" class="hidden">
-            <!-- Contacts List -->
-            <div id="contacts">
-                <h2>Contacts</h2>
-                <div id="contactsList"></div>
-                <input type="text" id="newContactInput" placeholder="Enter username to add">
-                <button id="addContact">Add Contact</button>
+            <div id="sidebar">
+                <div id="contacts">
+                    <h2>Contacts</h2>
+                    <div id="contactsList"></div>
+                    <input type="text" id="newContactInput" placeholder="Enter username to add">
+                    <button id="addContact">Add Contact</button>
+                </div>
+
+                <div id="groups">
+                    <h2>Groups</h2>
+                    <div id="groupsList"></div>
+                    <input type="text" id="newGroupName" placeholder="Enter group name">
+                    <button id="createGroup">Create Group</button>
+                </div>
             </div>
 
-            <!-- Chat Room -->
             <div id="chatRoom">
-                <h2 id="currentChatHeader">Select a contact to start chatting</h2>
+                <h2 id="currentChatHeader">Select a contact or group to start chatting</h2>
+                <div id="callControls" class="hidden">
+                    <button id="startVoiceCall">Start Voice Call</button>
+                    <button id="endVoiceCall" class="hidden">End Call</button>
+                </div>
                 <div id="messages"></div>
                 <div id="messageControls" class="hidden">
                     <input type="text" id="messageInput" placeholder="Type a message">
                     <button id="sendMessage">Send</button>
                 </div>
+                <div id="groupControls" class="hidden">
+                    <input type="text" id="addToGroupInput" placeholder="Enter username to add to group">
+                    <button id="addToGroup">Add to Group</button>
+                </div>
             </div>
         </div>
     </div>
+    <audio id="remoteAudio" autoplay></audio>
+    <script src="webrtc.js"></script>
     <script src="app.js"></script>
 </body>
 
