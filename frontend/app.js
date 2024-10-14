@@ -1,4 +1,4 @@
-const gun = Gun(['https://172.188.24.76:8080/gun']);
+const gun = Gun(['https://172.188.24.76:5001/gun']);
 
 // User state
 let user;

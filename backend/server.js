@@ -3,7 +3,7 @@ const Gun = require('gun');
 const path = require('path');
 
 const app = express();
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 5001;
 
 // Serve frontend files
 app.use(express.static(path.join(__dirname, '../frontend')));
