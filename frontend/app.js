@@ -1,4 +1,4 @@
-const gun = Gun(['https://172.188.24.76:3005/gun']);
+const gun = Gun(['https://https://dcomm.dev.trustgrid.com/gun']);
 
 // User state
 let user;
