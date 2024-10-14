@@ -1,4 +1,4 @@
-const gun = Gun(['https://https://dcomm.dev.trustgrid.com/gun']);
+const gun = Gun(['https://dcomm.dev.trustgrid.com/gun']);
 
 // User state
 let user;
