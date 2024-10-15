@@ -190,6 +190,13 @@
      height: 500px;
  }
 
+ .chat-room {
+     background-image: url('./images/logo.png');
+     background-size: 150px 150px;
+     background-position: center;
+     background-repeat: no-repeat;
+     color: #FFFADD;/
+ }
 
  #chatRoom {
      flex: 1;
