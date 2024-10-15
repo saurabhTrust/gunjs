@@ -281,9 +281,8 @@ function setupContactRequestListener() {
 //     // Refresh the contacts list
 //     loadContacts();
 
-//     // Notify the requester that the contact request was accepted
-//     gun.get('users').get(request.from).get('notifications').set({
-//       type: 'contact_accepted',
+//     // Send acknowledgment to the requester
+//     gun.get('users').get(request.from).get('contactAcceptances').set({
 //       from: user.is.alias,
 //       timestamp: Date.now()
 //     });
@@ -327,9 +326,9 @@ function handleContactRequest(request, requestId) {
 
     alert(`You are now connected with ${request.from}`);
   } else {
-    // If rejected, just mark as handled
-    gun.get('users').get(user.is.alias).get('contactRequests').get(requestId).put({...request, handled: true}, (ack) => {
-      console.log("Marked contact request as handled:", ack);
+    // If rejected, remove the request instead of marking it as handled
+    gun.get('users').get(user.is.alias).get('contactRequests').get(requestId).put(null, (ack) => {
+      console.log("Removed rejected contact request:", ack);
     });
   }
 }
@@ -455,6 +454,20 @@ function addUserToGroup() {
   }
 }
 
+// function setupGroupInvitationListener() {
+//   gun.get('users').get(user.is.alias).get('groupInvitations').map().on((invitation, invitationId) => {
+//     if (invitation && !invitation.handled) {
+//       const accepted = confirm(`${invitation.from} invited you to join the group "${invitation.groupName}". Accept?`);
+//       if (accepted) {
+//         user.get('groups').set(invitation.groupId);
+//         gun.get('groups').get(invitation.groupId).get('members').get(user.is.alias).put(true);
+//         loadGroups();
+//       }
+//       gun.get('users').get(user.is.alias).get('groupInvitations').get(invitationId).put({...invitation, handled: true});
+//     }
+//   });
+// }
+
 function setupGroupInvitationListener() {
   gun.get('users').get(user.is.alias).get('groupInvitations').map().on((invitation, invitationId) => {
     if (invitation && !invitation.handled) {
@@ -463,8 +476,17 @@ function setupGroupInvitationListener() {
         user.get('groups').set(invitation.groupId);
         gun.get('groups').get(invitation.groupId).get('members').get(user.is.alias).put(true);
         loadGroups();
+        
+        // Remove the invitation after accepting
+        gun.get('users').get(user.is.alias).get('groupInvitations').get(invitationId).put(null, (ack) => {
+          console.log("Removed accepted group invitation:", ack);
+        });
+      } else {
+        // Remove the invitation if rejected
+        gun.get('users').get(user.is.alias).get('groupInvitations').get(invitationId).put(null, (ack) => {
+          console.log("Removed rejected group invitation:", ack);
+        });
       }
-      gun.get('users').get(user.is.alias).get('groupInvitations').get(invitationId).put({...invitation, handled: true});
     }
   });
 }
@@ -805,15 +827,23 @@ async function encryptAndUploadFile(file) {
 
 async function sendFile() {
   const fileInput = document.getElementById('fileInput');
+  
   if (!fileInput.files[0]) {
+    // If no file is selected, open the file selector
     fileInput.click();
+    
+    // Wait for file selection
+    await new Promise(resolve => {
+      fileInput.onchange = () => resolve();
+    });
   }
+  
   const file = fileInput.files[0];
-  if (file) {
+  if (file && file.type.startsWith('image/')) {
     try {
       displayImage(file);
       const fileData = await encryptAndUploadFile(file);
-      // Chaos sceene here use gun to send the file data to the recei
+      
       gun.get(`chats`).get(getChatId(user.is.alias, currentChat)).set({
         sender: user.is.alias,
         type: 'file',
@@ -821,11 +851,19 @@ async function sendFile() {
         timestamp: Date.now()
       });
 
-      alert('File sent successfully!');
+      console.log('File sent successfully!');
+      
+      // Clear the file input
+      fileInput.value = '';
     } catch (error) {
       console.error('Error sending file:', error);
+      fileInput.value = '';
       alert('Error sending file. Please try again.');
     }
+  } else {
+    fileInput.value = '';
+    console.log('No file selected or file not supported image only');
+    alert('No file selected or file not supported image only');
   }
 }
 
