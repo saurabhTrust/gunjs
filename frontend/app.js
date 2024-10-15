@@ -1,4 +1,4 @@
-const gun = Gun(['https://localhost:8443/gun']);
+const gun = Gun(['https://dcomm.dev.trustgrid.com/gun']);
 const IPFS_BACKEND_URL = 'http://localhost:8000';
 
 // User state
