@@ -1,5 +1,5 @@
 const gun = Gun(['https://dcomm.dev.trustgrid.com/gun']);
-const IPFS_BACKEND_URL = 'http://localhost:8000';
+const IPFS_BACKEND_URL = 'https://ipfs-backend.uat.trustgrid.com';
 
 // User state
 let user;
@@ -805,6 +805,9 @@ async function encryptAndUploadFile(file) {
 
 async function sendFile() {
   const fileInput = document.getElementById('fileInput');
+  if (!fileInput.files[0]) {
+    fileInput.click();
+  }
   const file = fileInput.files[0];
   if (file) {
     try {
