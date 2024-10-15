@@ -409,18 +409,18 @@ function startGroupChat(groupId, groupName) {
   loadGroupMessages(groupId);
 }
 
-function loadGroupMessages(groupId) {
-  gun.get(`groupChats`).get(groupId).map().on((message, id) => {
-    if (message && !messagesDiv.querySelector(`[data-id="${id}"]`)) {
-      const messageElement = document.createElement('div');
-      messageElement.textContent = `${message.sender}: ${message.content}`;
-      messageElement.dataset.id = id;
-      messageElement.classList.add('message', message.sender === user.is.alias ? 'sent' : 'received');
-      messagesDiv.appendChild(messageElement);
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
-  });
-}
+// function loadGroupMessages(groupId) {
+//   gun.get(`groupChats`).get(groupId).map().on((message, id) => {
+//     if (message && !messagesDiv.querySelector(`[data-id="${id}"]`)) {
+//       const messageElement = document.createElement('div');
+//       messageElement.textContent = `${message.sender}: ${message.content}`;
+//       messageElement.dataset.id = id;
+//       messageElement.classList.add('message', message.sender === user.is.alias ? 'sent' : 'received');
+//       messagesDiv.appendChild(messageElement);
+//       messagesDiv.scrollTop = messagesDiv.scrollHeight;
+//     }
+//   });
+// }
 
 function addUserToGroup() {
   const username = addToGroupInput.value.trim();
@@ -825,47 +825,47 @@ async function encryptAndUploadFile(file) {
   return JSON.stringify(data);
 }
 
-async function sendFile() {
-  const fileInput = document.getElementById('fileInput');
+// async function sendFile() {
+//   const fileInput = document.getElementById('fileInput');
   
-  if (!fileInput.files[0]) {
-    // If no file is selected, open the file selector
-    fileInput.click();
+//   if (!fileInput.files[0]) {
+//     // If no file is selected, open the file selector
+//     fileInput.click();
     
-    // Wait for file selection
-    await new Promise(resolve => {
-      fileInput.onchange = () => resolve();
-    });
-  }
+//     // Wait for file selection
+//     await new Promise(resolve => {
+//       fileInput.onchange = () => resolve();
+//     });
+//   }
   
-  const file = fileInput.files[0];
-  if (file && file.type.startsWith('image/')) {
-    try {
-      displayImage(file);
-      const fileData = await encryptAndUploadFile(file);
+//   const file = fileInput.files[0];
+//   if (file && file.type.startsWith('image/')) {
+//     try {
+//       displayImage(file);
+//       const fileData = await encryptAndUploadFile(file);
       
-      gun.get(`chats`).get(getChatId(user.is.alias, currentChat)).set({
-        sender: user.is.alias,
-        type: 'file',
-        content: fileData,
-        timestamp: Date.now()
-      });
+//       gun.get(`chats`).get(getChatId(user.is.alias, currentChat)).set({
+//         sender: user.is.alias,
+//         type: 'file',
+//         content: fileData,
+//         timestamp: Date.now()
+//       });
 
-      console.log('File sent successfully!');
+//       console.log('File sent successfully!');
       
-      // Clear the file input
-      fileInput.value = '';
-    } catch (error) {
-      console.error('Error sending file:', error);
-      fileInput.value = '';
-      alert('Error sending file. Please try again.');
-    }
-  } else {
-    fileInput.value = '';
-    console.log('No file selected or file not supported image only');
-    alert('No file selected or file not supported image only');
-  }
-}
+//       // Clear the file input
+//       fileInput.value = '';
+//     } catch (error) {
+//       console.error('Error sending file:', error);
+//       fileInput.value = '';
+//       alert('Error sending file. Please try again.');
+//     }
+//   } else {
+//     fileInput.value = '';
+//     console.log('No file selected or file not supported image only');
+//     alert('No file selected or file not supported image only');
+//   }
+// }
 
 // async function receiveAndDecryptFile(fileData) {
 //   try {
@@ -919,6 +919,55 @@ async function sendFile() {
 //     alert('Error receiving file. Please try again.');
 //   }
 // }
+
+
+async function sendFile() {
+  const fileInput = document.getElementById('fileInput');
+  
+  if (!fileInput.files[0]) {
+    fileInput.click();
+    
+    await new Promise(resolve => {
+      fileInput.onchange = () => resolve();
+    });
+  }
+  
+  const file = fileInput.files[0];
+  if (file && file.type.startsWith('image/')) {
+    try {
+      displayImage(file);
+      const fileData = await encryptAndUploadFile(file);
+      
+      if (currentChatType === 'direct') {
+        gun.get(`chats`).get(getChatId(user.is.alias, currentChat)).set({
+          sender: user.is.alias,
+          type: 'file',
+          content: fileData,
+          timestamp: Date.now()
+        });
+      } else if (currentChatType === 'group') {
+        gun.get(`groupChats`).get(currentChat).set({
+          sender: user.is.alias,
+          type: 'file',
+          content: fileData,
+          timestamp: Date.now()
+        });
+      }
+
+      console.log('File sent successfully!');
+      
+      fileInput.value = '';
+    } catch (error) {
+      console.error('Error sending file:', error);
+      fileInput.value = '';
+      alert('Error sending file. Please try again.');
+    }
+  } else {
+    fileInput.value = '';
+    console.log('No file selected or file not supported. Image files only.');
+    alert('No file selected or file not supported. Image files only.');
+  }
+}
 
 async function receiveAndDecryptFile(fileData) {
   try {
@@ -1013,32 +1062,70 @@ async function deleteFileFromIPFS(cid) {
   }
 }
 
+// function loadMessages(contactAlias) {
+//   const chatId = getChatId(user.is.alias, contactAlias);
+//   gun.get(`chats`).get(chatId).map().on((message, id) => {
+//     if (message && !messagesDiv.querySelector(`[data-id="${id}"]`)) {
+//       const messageElement = document.createElement('div');
+//       if (message.type === 'file') {
+//         console.log(message);
+//         try {
+//           message.content = JSON.parse(message.content);
+//         } catch (err) {
+//           message = message;
+//         }
+//         messageElement.textContent = `${message.sender} sent a file: ${message.content.fileName}`;
+//         const downloadButton = document.createElement('button');
+//         downloadButton.textContent = 'Download';
+//         downloadButton.addEventListener('click', () => receiveAndDecryptFile(message.content));
+//         messageElement.appendChild(downloadButton);
+//       } else {
+//         messageElement.textContent = `${message.sender}: ${message.content}`;
+//       }
+//       messageElement.dataset.id = id;
+//       messageElement.classList.add('message', message.sender === user.is.alias ? 'sent' : 'received');
+//       messagesDiv.appendChild(messageElement);
+//       messagesDiv.scrollTop = messagesDiv.scrollHeight;
+//     }
+//   });
+// }
+
 function loadMessages(contactAlias) {
   const chatId = getChatId(user.is.alias, contactAlias);
   gun.get(`chats`).get(chatId).map().on((message, id) => {
-    if (message && !messagesDiv.querySelector(`[data-id="${id}"]`)) {
-      const messageElement = document.createElement('div');
-      if (message.type === 'file') {
-        console.log(message);
-        try {
-          message.content = JSON.parse(message.content);
-        } catch (err) {
-          message = message;
-        }
-        messageElement.textContent = `${message.sender} sent a file: ${message.content.fileName}`;
-        const downloadButton = document.createElement('button');
-        downloadButton.textContent = 'Download';
-        downloadButton.addEventListener('click', () => receiveAndDecryptFile(message.content));
-        messageElement.appendChild(downloadButton);
-      } else {
-        messageElement.textContent = `${message.sender}: ${message.content}`;
-      }
-      messageElement.dataset.id = id;
-      messageElement.classList.add('message', message.sender === user.is.alias ? 'sent' : 'received');
-      messagesDiv.appendChild(messageElement);
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
+    displayMessage(message, id);
   });
+}
+
+function loadGroupMessages(groupId) {
+  gun.get(`groupChats`).get(groupId).map().on((message, id) => {
+    displayMessage(message, id);
+  });
+}
+
+function displayMessage(message, id) {
+  if (message && !messagesDiv.querySelector(`[data-id="${id}"]`)) {
+    const messageElement = document.createElement('div');
+    if (message.type === 'file') {
+      console.log(message);
+      try {
+        message.content = JSON.parse(message.content);
+      } catch (err) {
+        console.error('Error parsing file content:', err);
+      }
+      messageElement.textContent = `${message.sender} sent a file: ${message.content.fileName}`;
+      const downloadButton = document.createElement('button');
+      downloadButton.textContent = 'Download';
+      downloadButton.addEventListener('click', () => receiveAndDecryptFile(message.content));
+      messageElement.appendChild(downloadButton);
+    } else {
+      messageElement.textContent = `${message.sender}: ${message.content}`;
+    }
+    messageElement.dataset.id = id;
+    messageElement.classList.add('message', message.sender === user.is.alias ? 'sent' : 'received');
+    messagesDiv.appendChild(messageElement);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  }
 }
 
 function arrayBufferToBase64(buffer) {

@@ -166,12 +166,14 @@
             document.getElementById('chatRoom').style.display = 'flex';
             document.getElementById('messageControls').style.display = 'flex';
             document.getElementById('groupControls').style.display = 'none';
+            document.getElementById('startVoiceCall').classList.remove('hidden');
         }
 
         function showGroupRoom() {
             document.getElementById('chatRoom').style.display = 'flex';
             document.getElementById('messageControls').style.display = 'flex';
             document.getElementById('groupControls').style.display = 'flex';
+            document.getElementById('startVoiceCall').classList.add('hidden');
         }
 
         // Add this function call when a contact or group is selected
