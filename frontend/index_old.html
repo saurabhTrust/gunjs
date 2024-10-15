@@ -1,0 +1,369 @@
+<!-- <!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Decentralized End-to-End Messenger</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ipfs-http-client/dist/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/eccrypto/dist/eccrypto.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-type/browser.min.js"></script>
+</head>
+
+<body>
+    <div id="app">
+        <h1>Decentralized End-to-End Messenger</h1>
+
+        <div id="auth">
+            <input type="text" id="username" placeholder="Enter Username">
+            <input type="password" id="password" placeholder="Enter Password" value="Guess@007000">
+            <small>Password must be at least 12 characters long and contain at least one lowercase letter, one uppercase
+                letter, one number, and one special character.</small>
+            <button id="login">Login</button>
+            <button id="register">Register</button>
+        </div>
+
+        <div id="chat" class="hidden">
+            <div id="sidebar">
+                <div id="contacts">
+                    <h2>Contacts</h2>
+                    <div id="contactsList"></div>
+                    <input type="text" id="newContactInput" placeholder="Enter username to add">
+                    <button id="addContact">Add Contact</button>
+                </div>
+
+                <div id="groups">
+                    <h2>Groups</h2>
+                    <div id="groupsList"></div>
+                    <input type="text" id="newGroupName" placeholder="Enter group name">
+                    <button id="createGroup">Create Group</button>
+                </div>
+            </div>
+
+            <div id="chatRoom">
+                <h2 id="currentChatHeader">Select a contact or group to start chatting</h2>
+                <div id="callControls" class="hidden">
+                    <button id="startVoiceCall">Start Voice Call</button>
+                    <button id="endVoiceCall" class="hidden">End Call</button>
+                </div>
+                <div id="messages"></div>
+                <div id="messageControls" class="hidden">
+                    <input type="text" id="messageInput" placeholder="Type a message">
+                    <button id="sendMessage">Send</button>
+                    <input type="file" id="fileInput">
+                    <button id="sendFile">Send File</button>
+                </div>
+                <div id="groupControls" class="hidden">
+                    <input type="text" id="addToGroupInput" placeholder="Enter username to add to group">
+                    <button id="addToGroup">Add to Group</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <audio id="remoteAudio" autoplay></audio>
+    <script src="webrtc.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html> -->
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Decentralized End-to-End Messenger</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body,
+        html {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        #app {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        h1 {
+            text-align: center;
+            padding: 20px;
+            margin: 0;
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        #auth {
+            padding: 20px;
+        }
+
+        #auth input,
+        #auth button {
+            display: block;
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        #auth button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        #chat {
+            flex: 1;
+            /* display: flex; */
+        }
+
+        #sidebar {
+            width: 300px;
+            border-right: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-tabs {
+            display: flex;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .sidebar-tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            background-color: #f0f0f0;
+        }
+
+        .sidebar-tab.active {
+            background-color: white;
+            border-bottom: 2px solid #4CAF50;
+        }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            display: none;
+            padding: 10px;
+        }
+
+        .sidebar-content.active {
+            display: block;
+        }
+
+        .add-item {
+            display: flex;
+            margin-top: 10px;
+        }
+
+        .add-item input {
+            flex: 1;
+            margin-right: 5px;
+            padding: 5px;
+        }
+
+        .add-item button {
+            width: 40px;
+            padding: 5px;
+        }
+
+        #chatRoom {
+            flex: 1;
+            display: none;
+            flex-direction: column;
+        }
+
+        #messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        #messageControls {
+            display: none;
+            padding: 10px;
+            border-top: 1px solid #ddd;
+        }
+
+        #groupControls {
+            display: none;
+            padding: 10px;
+            border-top: 1px solid #ddd;
+        }
+
+        #messageInput {
+            flex: 1;
+            margin-right: 10px;
+            padding: 5px;
+        }
+
+        #addToGroupInput {
+            flex: 1;
+            margin-right: 10px;
+            padding: 5px;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        #callControls {
+            display: inline;
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+
+        .message {
+            margin-bottom: 10px;
+            padding: 5px 10px;
+            border-radius: 4px;
+            max-width: 70%;
+        }
+
+        .sent {
+            background-color: #DCF8C6;
+            align-self: flex-end;
+        }
+
+        .received {
+            background-color: #E0E0E0;
+            align-self: flex-start;
+        }
+
+        .heading {
+            display: inline;
+        }
+
+        .recendButton {
+            margin-left: 50%;
+            text-align: center;
+        }
+
+        @media (max-width: 768px) {
+            #chat {
+                flex-direction: column;
+            }
+
+            #sidebar {
+                width: 100%;
+                max-height: 300px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <h1>Decentralized End-to-End Messenger</h1>
+
+        <div id="auth">
+            <input type="text" id="username" placeholder="Enter Username">
+            <input type="password" id="password" placeholder="Enter Password" value="Guess@007000">
+            <small>Password must be at least 12 characters long and contain at least one lowercase letter, one uppercase
+                letter, one number, and one special character.</small>
+            <button id="login">Login</button>
+            <button id="register">Register</button>
+        </div>
+
+        <div id="chat" class="hidden">
+            <div id="sidebar">
+                <div class="sidebar-tabs">
+                    <div class="sidebar-tab active" data-tab="contacts">Contacts</div>
+                    <div class="sidebar-tab" data-tab="groups">Groups</div>
+                </div>
+                <div id="contacts" class="sidebar-content active">
+                    <div id="contactsList"></div>
+                    <div class="add-item">
+                        <input type="text" id="newContactInput" placeholder="Enter username to add">
+                        <button id="addContact"><i class="fas fa-plus"></i></button>
+                    </div>
+                </div>
+                <div id="groups" class="sidebar-content">
+                    <div id="groupsList"></div>
+                    <div class="add-item">
+                        <input type="text" id="newGroupName" placeholder="Enter group name">
+                        <button id="createGroup"><i class="fas fa-plus"></i></button>
+                    </div>
+                </div>
+            </div>
+            <div id="chatRoom">
+                <div id="callControls" class="hidden">
+                    <h2 id="currentChatHeader" class="heading">Select a contact or group to start chatting</h2>
+                    <button id="startVoiceCall" class="recendButton"><i class="fas fa-phone"></i></button>
+                    <button id="endVoiceCall" class="hidden recendButton"><i class="fas fa-phone-slash"></i></button>
+                </div>
+                <div id="messages"></div>
+                <div id="messageControls">
+                    <input type="text" id="messageInput" placeholder="Type a message">
+                    <button id="sendMessage"><i class="fas fa-paper-plane"></i></button>
+                    <input type="file" id="fileInput" class="hidden">
+                    <button id="sendFile"><i class="fas fa-paperclip"></i></button>
+                </div>
+                <div id="groupControls">
+                    <input type="text" id="addToGroupInput" placeholder="Enter username to add to group">
+                    <button id="addToGroup"><i class="fas fa-plus"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <audio id="remoteAudio" autoplay></audio>
+    <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ipfs-http-client/dist/index.min.js"></script>
+    <script src="webrtc.js"></script>
+    <script src="app.js"></script>
+    <script>
+        // Tab switching
+        document.querySelectorAll('.sidebar-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.sidebar-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        // Function to show chatRoom
+        function showChatRoom() {
+            document.getElementById('chatRoom').style.display = 'flex';
+            document.getElementById('messageControls').style.display = 'flex';
+            document.getElementById('groupControls').style.display = 'none';
+        }
+
+        function showGroupRoom() {
+            document.getElementById('chatRoom').style.display = 'flex';
+            document.getElementById('messageControls').style.display = 'flex';
+            document.getElementById('groupControls').style.display = 'flex';
+        }
+
+        // Add this function call when a contact or group is selected
+        // For example:
+        document.getElementById('contactsList').addEventListener('click', (e) => {
+            if (e.target.classList.contains('contact')) {
+                showChatRoom();
+            }
+        });
+        document.getElementById('groupsList').addEventListener('click', (e) => {
+            if (e.target.classList.contains('group')) {
+                showGroupRoom();
+            }
+        });
+    </script>
+</body>
+
+</html>

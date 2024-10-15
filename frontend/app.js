@@ -1,4 +1,5 @@
-const gun = Gun(['https://dcomm.dev.trustgrid.com/gun']);
+const gun = Gun(['https://localhost:8443/gun']);
+const IPFS_BACKEND_URL = 'http://localhost:8000';
 
 // User state
 let user;
@@ -111,19 +112,19 @@ function startChat(contactAlias) {
   loadMessages(contactAlias);
 }
 
-function loadMessages(contactAlias) {
-  const chatId = getChatId(user.is.alias, contactAlias);
-  gun.get(`chats`).get(chatId).map().on((message, id) => {
-    if (message && !messagesDiv.querySelector(`[data-id="${id}"]`)) {
-      const messageElement = document.createElement('div');
-      messageElement.textContent = `${message.sender}: ${message.content}`;
-      messageElement.dataset.id = id;
-      messageElement.classList.add('message', message.sender === user.is.alias ? 'sent' : 'received');
-      messagesDiv.appendChild(messageElement);
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
-  });
-}
+// function loadMessages(contactAlias) {
+//   const chatId = getChatId(user.is.alias, contactAlias);
+//   gun.get(`chats`).get(chatId).map().on((message, id) => {
+//     if (message && !messagesDiv.querySelector(`[data-id="${id}"]`)) {
+//       const messageElement = document.createElement('div');
+//       messageElement.textContent = `${message.sender}: ${message.content}`;
+//       messageElement.dataset.id = id;
+//       messageElement.classList.add('message', message.sender === user.is.alias ? 'sent' : 'received');
+//       messagesDiv.appendChild(messageElement);
+//       messagesDiv.scrollTop = messagesDiv.scrollHeight;
+//     }
+//   });
+// }
 
 // function sendMessage() {
 //   const content = messageInput.value.trim();
@@ -758,3 +759,277 @@ function setupICECandidateListener(callId) {
     }
   });
 }
+
+async function encryptAndUploadFile(file) {
+  const fileBuffer = await file.arrayBuffer();
+  const symKey = await crypto.subtle.generateKey(
+    { name: "AES-GCM", length: 256 },
+    true,
+    ["encrypt", "decrypt"]
+  );
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encryptedFile = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: iv },
+    symKey,
+    fileBuffer
+  );
+  const encryptedBlob = new Blob([encryptedFile], { type: file.type });
+  const formData = new FormData();
+  formData.append('file', encryptedBlob, file.name);
+  const response = await fetch(`${IPFS_BACKEND_URL}/upload`, {
+    method: 'POST',
+    body: formData
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  const result = await response.json();
+  const cid = result.ipfs.IpfsHash;
+  const exportedSymKey = await crypto.subtle.exportKey("raw", symKey);
+  console.log({
+    cid: cid,
+    encryptedSymKey: arrayBufferToBase64(exportedSymKey),
+    iv: arrayBufferToBase64(iv),
+    fileName: file.name,
+    fileType: file.type
+  });
+  const data =  {
+    cid: cid,
+    encryptedSymKey: arrayBufferToBase64(exportedSymKey),
+    iv: arrayBufferToBase64(iv),
+    fileName: file.name,
+    fileType: file.type
+  };
+  return JSON.stringify(data);
+}
+
+async function sendFile() {
+  const fileInput = document.getElementById('fileInput');
+  const file = fileInput.files[0];
+  if (file) {
+    try {
+      displayImage(file);
+      const fileData = await encryptAndUploadFile(file);
+      // Chaos sceene here use gun to send the file data to the recei
+      gun.get(`chats`).get(getChatId(user.is.alias, currentChat)).set({
+        sender: user.is.alias,
+        type: 'file',
+        content: fileData,
+        timestamp: Date.now()
+      });
+
+      alert('File sent successfully!');
+    } catch (error) {
+      console.error('Error sending file:', error);
+      alert('Error sending file. Please try again.');
+    }
+  }
+}
+
+// async function receiveAndDecryptFile(fileData) {
+//   try {
+//     // Download encrypted file from custom IPFS backend
+//     const response = await fetch(`${IPFS_BACKEND_URL}/getFile`, {
+//       method: 'POST',
+//       headers: {
+//         'Content-Type': 'application/json',
+//       },
+//       body: JSON.stringify({ cid: fileData.cid })
+//     });
+
+//     if (!response.ok) {
+//       throw new Error(`HTTP error! status: ${response.status}`);
+//     }
+
+//     const encryptedFile = await response.arrayBuffer();
+
+//     // Import the symmetric key
+//     const symKey = await crypto.subtle.importKey(
+//       "raw",
+//       base64ToArrayBuffer(fileData.encryptedSymKey),
+//       { name: "AES-GCM", length: 256 },
+//       false,
+//       ["decrypt"]
+//     );
+
+//     // Decrypt file with symmetric key
+//     const decryptedFile = await crypto.subtle.decrypt(
+//       { name: "AES-GCM", iv: base64ToArrayBuffer(fileData.iv) },
+//       symKey,
+//       encryptedFile
+//     );
+
+//     // Create Blob with decrypted data
+//     const blob = new Blob([decryptedFile], { type: fileData.fileType });
+
+//     // Create download link
+//     const url = URL.createObjectURL(blob);
+//     const a = document.createElement('a');
+//     a.href = url;
+//     a.download = fileData.fileName || 'downloadedFile';
+//     document.body.appendChild(a);
+//     a.click();
+//     document.body.removeChild(a);
+//     URL.revokeObjectURL(url);
+
+//     alert('File downloaded and decrypted successfully!');
+//   } catch (error) {
+//     console.error('Error receiving file:', error);
+//     alert('Error receiving file. Please try again.');
+//   }
+// }
+
+async function receiveAndDecryptFile(fileData) {
+  try {
+    console.log(JSON.parse(fileData).cid);
+    const fileInfo = JSON.parse(fileData)
+    const response = await fetch(`${IPFS_BACKEND_URL}/getFile`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ cid: fileInfo.cid })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    const fileUrl = result.result;
+    const encryptedFileResponse = await fetch(fileUrl);
+    if (!encryptedFileResponse.ok) {
+      throw new Error(`File download failed: ${encryptedFileResponse.statusText}`);
+    }
+
+    // Get the total size of the file (if available)
+    const totalSize = parseInt(encryptedFileResponse.headers.get('Content-Length') || '0');
+    let downloadedSize = 0;
+
+    // Create a ReadableStream from the response body
+    const reader = encryptedFileResponse.body.getReader();
+    const chunks = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      downloadedSize += value.length;
+
+      // Update download progress
+      if (totalSize > 0) {
+        const progress = (downloadedSize / totalSize) * 100;
+        console.log(`Download progress: ${progress.toFixed(2)}%`);
+        // You can update a progress bar or other UI element here
+      }
+    }
+
+    // Combine all chunks into a single Uint8Array
+    const encryptedFile = new Uint8Array(downloadedSize);
+    let position = 0;
+    for (const chunk of chunks) {
+      encryptedFile.set(chunk, position);
+      position += chunk.length;
+    }
+    const symKey = await crypto.subtle.importKey(
+      "raw",
+      base64ToArrayBuffer(fileInfo.encryptedSymKey),
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["decrypt"]
+    );
+    const decryptedFile = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: base64ToArrayBuffer(fileInfo.iv) },
+      symKey,
+      encryptedFile
+    );
+    const blob = new Blob([decryptedFile], { type: fileInfo.fileType });
+    displayImage(blob);
+  } catch (error) {
+    console.error('Error receiving file:', error);
+    alert('Error receiving file. Please try again.');
+  }
+}
+
+async function deleteFileFromIPFS(cid) {
+  try {
+    const response = await fetch(`${IPFS_BACKEND_URL}/deleteFile`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ cid: cid })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('File deleted:', result);
+  } catch (error) {
+    console.error('Error deleting file:', error);
+  }
+}
+
+function loadMessages(contactAlias) {
+  const chatId = getChatId(user.is.alias, contactAlias);
+  gun.get(`chats`).get(chatId).map().on((message, id) => {
+    if (message && !messagesDiv.querySelector(`[data-id="${id}"]`)) {
+      const messageElement = document.createElement('div');
+      if (message.type === 'file') {
+        console.log(message);
+        try {
+          message.content = JSON.parse(message.content);
+        } catch (err) {
+          message = message;
+        }
+        messageElement.textContent = `${message.sender} sent a file: ${message.content.fileName}`;
+        const downloadButton = document.createElement('button');
+        downloadButton.textContent = 'Download';
+        downloadButton.addEventListener('click', () => receiveAndDecryptFile(message.content));
+        messageElement.appendChild(downloadButton);
+      } else {
+        messageElement.textContent = `${message.sender}: ${message.content}`;
+      }
+      messageElement.dataset.id = id;
+      messageElement.classList.add('message', message.sender === user.is.alias ? 'sent' : 'received');
+      messagesDiv.appendChild(messageElement);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+  });
+}
+
+function arrayBufferToBase64(buffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function base64ToArrayBuffer(base64) {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+function displayImage(blob) {
+  const url = URL.createObjectURL(blob);
+  const img = document.createElement('img');
+  img.src = url;
+  img.style.maxWidth = '200px'; // Adjust as needed
+  img.style.maxHeight = '200px'; // Adjust as needed
+  
+  const messagesDiv = document.getElementById('messages');
+  messagesDiv.appendChild(img);
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+
+
+document.getElementById('sendFile').addEventListener('click', sendFile);
