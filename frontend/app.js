@@ -11,6 +11,7 @@ let localStream;
 let isCallInProgress = false;
 let localICECandidates = [];
 let currentCall = null;
+let isVideoCall = false;
 
 // DOM Elements
 const authDiv = document.getElementById('auth');
@@ -36,6 +37,9 @@ const startVoiceCallBtn = document.getElementById('startVoiceCall');
 const endVoiceCallBtn = document.getElementById('endVoiceCall');
 const callControls = document.getElementById('callControls');
 const remoteAudio = document.getElementById('remoteAudio');
+const startVideoCallBtn = document.getElementById("startVideoCall");
+const endCallBtn = document.getElementById('endCall');
+
 
 
 function register() {
@@ -220,8 +224,8 @@ addContactBtn.addEventListener('click', addContact);
 createGroupBtn.addEventListener('click', createGroup);
 addToGroupBtn.addEventListener('click', addUserToGroup);
 
-startVoiceCallBtn.addEventListener('click', startVoiceCall);
-endVoiceCallBtn.addEventListener('click', endVoiceCall);
+// startVoiceCallBtn.addEventListener('click', startVoiceCall);
+// endVoiceCallBtn.addEventListener('click', endVoiceCall);
 
 // Initialize when the page loads
 window.addEventListener('load', () => {
@@ -491,7 +495,91 @@ function setupGroupInvitationListener() {
   });
 }
 
-async function startVoiceCall() {
+// async function startVoiceCall() {
+//   if (isCallInProgress || currentChatType !== 'direct') {
+//     alert('A call is already in progress or you\'re not in a direct chat.');
+//     return;
+//   }
+
+//   try {
+//     isCallInProgress = true;
+//     localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+//     console.log('Local stream obtained:', localStream.getTracks());
+    
+//     peerConnection = await webrtcHandler.createPeerConnection();
+//     const offer = await webrtcHandler.startCall(localStream);
+    
+//     const callId = Date.now().toString();
+//     currentCall = {
+//       id: callId,
+//       to: currentChat,
+//       from: user.is.alias,
+//       startTime: Date.now()
+//     };
+
+//     const offerData = {
+//       type: 'offer',
+//       callId: callId,
+//       from: user.is.alias,
+//       to: currentChat,
+//       offerType: offer.type,
+//       offerSdp: offer.sdp,
+//       startTime: currentCall.startTime
+//     };
+
+//     gun.get(`calls`).get(callId).put(offerData);
+//     console.log('Offer sent:', offerData);
+
+//     setupICECandidateListener(callId);
+    
+//     startVoiceCallBtn.classList.add('hidden');
+//     endVoiceCallBtn.classList.remove('hidden');
+
+//     // Set a timeout to check if the call was established
+//     setTimeout(() => {
+//       if (peerConnection && peerConnection.iceConnectionState !== 'connected' && peerConnection.iceConnectionState !== 'completed') {
+//         console.log('Call setup timeout. Current ICE state:', peerConnection.iceConnectionState);
+//         alert('Call setup timed out. Please try again.');
+//         endVoiceCall();
+//       }
+//     }, 30000);  // 30 seconds timeout
+
+//   } catch (error) {
+//     console.error('Error starting voice call:', error);
+//     alert('Error starting voice call: ' + error.message);
+//     isCallInProgress = false;
+//     if (localStream) {
+//       localStream.getTracks().forEach(track => track.stop());
+//     }
+//     currentCall = null;
+//   }
+// }
+
+// function endVoiceCall() {
+//   if (peerConnection) {
+//     peerConnection.close();
+//     peerConnection = null;
+//   }
+//   if (localStream) {
+//     localStream.getTracks().forEach(track => track.stop());
+//     localStream = null;
+//   }
+//   remoteAudio.srcObject = null;
+//   if (currentCall) {
+//     gun.get(`calls`).get(currentCall.id).put({ 
+//       type: 'end',
+//       from: user.is.alias,
+//       to: currentCall.to,
+//       endTime: Date.now()
+//     });
+//     currentCall = null;
+//   }
+//   isCallInProgress = false;
+//   startVoiceCallBtn.classList.remove('hidden');
+//   endVoiceCallBtn.classList.add('hidden');
+// }
+
+async function startCall(withVideo = false) {
   if (isCallInProgress || currentChatType !== 'direct') {
     alert('A call is already in progress or you\'re not in a direct chat.');
     return;
@@ -499,8 +587,15 @@ async function startVoiceCall() {
 
   try {
     isCallInProgress = true;
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    isVideoCall = withVideo;
+    const mediaConstraints = { audio: true, video: withVideo };
+    localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
     console.log('Local stream obtained:', localStream.getTracks());
+    
+    if (withVideo) {
+      document.getElementById('localVideo').srcObject = localStream;
+      document.getElementById('videoContainer').classList.remove('hidden');
+    }
     
     peerConnection = await webrtcHandler.createPeerConnection();
     const offer = await webrtcHandler.startCall(localStream);
@@ -510,7 +605,8 @@ async function startVoiceCall() {
       id: callId,
       to: currentChat,
       from: user.is.alias,
-      startTime: Date.now()
+      startTime: Date.now(),
+      isVideo: withVideo
     };
 
     const offerData = {
@@ -520,7 +616,8 @@ async function startVoiceCall() {
       to: currentChat,
       offerType: offer.type,
       offerSdp: offer.sdp,
-      startTime: currentCall.startTime
+      startTime: currentCall.startTime,
+      isVideo: withVideo
     };
 
     gun.get(`calls`).get(callId).put(offerData);
@@ -529,20 +626,21 @@ async function startVoiceCall() {
     setupICECandidateListener(callId);
     
     startVoiceCallBtn.classList.add('hidden');
-    endVoiceCallBtn.classList.remove('hidden');
+    startVideoCallBtn.classList.add('hidden');
+    endCallBtn.classList.remove('hidden');
 
     // Set a timeout to check if the call was established
     setTimeout(() => {
       if (peerConnection && peerConnection.iceConnectionState !== 'connected' && peerConnection.iceConnectionState !== 'completed') {
         console.log('Call setup timeout. Current ICE state:', peerConnection.iceConnectionState);
         alert('Call setup timed out. Please try again.');
-        endVoiceCall();
+        endCall();
       }
     }, 30000);  // 30 seconds timeout
 
   } catch (error) {
-    console.error('Error starting voice call:', error);
-    alert('Error starting voice call: ' + error.message);
+    console.error('Error starting call:', error);
+    alert('Error starting call: ' + error.message);
     isCallInProgress = false;
     if (localStream) {
       localStream.getTracks().forEach(track => track.stop());
@@ -551,7 +649,8 @@ async function startVoiceCall() {
   }
 }
 
-function endVoiceCall() {
+
+function endCall() {
   if (peerConnection) {
     peerConnection.close();
     peerConnection = null;
@@ -561,6 +660,9 @@ function endVoiceCall() {
     localStream = null;
   }
   remoteAudio.srcObject = null;
+  document.getElementById('remoteVideo').srcObject = null;
+  document.getElementById('localVideo').srcObject = null;
+  document.getElementById('videoContainer').classList.add('hidden');
   if (currentCall) {
     gun.get(`calls`).get(currentCall.id).put({ 
       type: 'end',
@@ -571,8 +673,10 @@ function endVoiceCall() {
     currentCall = null;
   }
   isCallInProgress = false;
+  isVideoCall = false;
   startVoiceCallBtn.classList.remove('hidden');
-  endVoiceCallBtn.classList.add('hidden');
+  document.getElementById('startVideoCall').classList.remove('hidden');
+  document.getElementById('endCall').classList.add('hidden');
 }
 
 function initializeWebRTC() {
@@ -621,7 +725,7 @@ gun.on('auth', () => {
         console.error('Error setting remote description:', error);
       }
     } else if (data.type === 'end') {
-      endVoiceCall();
+      endCall();
     }
   });
 });
@@ -660,18 +764,100 @@ function checkAudioLevels(stream, label) {
   checkLevel();
 }
 
+// async function handleIncomingCall(data) {
+//   if (isCallInProgress) {
+//     console.log('Already in a call, ignoring incoming call');
+//     return;
+//   }
+
+//   const confirmed = confirm(`Incoming call from ${data.from}. Accept?`);
+//   if (confirmed) {
+//     try {
+//       isCallInProgress = true;
+//       localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+//       console.log('Local stream obtained:', localStream.getTracks());
+      
+//       peerConnection = await webrtcHandler.createPeerConnection();
+      
+//       const offer = {
+//         type: data.offerType,
+//         sdp: data.offerSdp
+//       };
+
+//       const answer = await webrtcHandler.handleIncomingCall(offer, localStream);
+      
+//       currentCall = {
+//         id: data.callId,
+//         to: data.from,
+//         from: user.is.alias,
+//         startTime: Date.now()
+//       };
+
+//       const answerData = {
+//         type: 'answer',
+//         callId: data.callId,
+//         from: user.is.alias,
+//         to: data.from,
+//         answerType: answer.type,
+//         answerSdp: answer.sdp,
+//         time: currentCall.startTime
+//       };
+
+//       gun.get(`calls`).get(data.callId).put(answerData);
+//       console.log('Answer sent:', answerData);
+
+//       setupICECandidateListener(data.callId);
+      
+//       startVoiceCallBtn.classList.add('hidden');
+//       endVoiceCallBtn.classList.remove('hidden');
+
+//       // Send buffered ICE candidates
+//       sendBufferedICECandidates(data.callId);
+
+//       // Set a timeout to check if the call was established
+//       setTimeout(() => {
+//         if (peerConnection && peerConnection.iceConnectionState !== 'connected' && peerConnection.iceConnectionState !== 'completed') {
+//           console.log('Call setup timeout. Current ICE state:', peerConnection.iceConnectionState);
+//           alert('Call setup timed out. Please try again.');
+//           endVoiceCall();
+//         }
+//       }, 30000);  // 30 seconds timeout
+
+//     } catch (error) {
+//       console.error('Error accepting call:', error);
+//       alert(`Error accepting call: ${error.message}`);
+//       endVoiceCall();
+//     }
+//   } else {
+//     gun.get(`calls`).get(data.callId).put({ 
+//       type: 'reject',
+//       from: user.is.alias,
+//       to: data.from,
+//       time: Date.now()
+//     });
+//   }
+// }
+
 async function handleIncomingCall(data) {
   if (isCallInProgress) {
     console.log('Already in a call, ignoring incoming call');
     return;
   }
 
-  const confirmed = confirm(`Incoming call from ${data.from}. Accept?`);
+  const callType = data.isVideo ? 'video' : 'voice';
+  const confirmed = confirm(`Incoming ${callType} call from ${data.from}. Accept?`);
   if (confirmed) {
     try {
       isCallInProgress = true;
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      isVideoCall = data.isVideo;
+      const mediaConstraints = { audio: true, video: data.isVideo };
+      localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
       console.log('Local stream obtained:', localStream.getTracks());
+      
+      if (data.isVideo) {
+        document.getElementById('localVideo').srcObject = localStream;
+        document.getElementById('videoContainer').classList.remove('hidden');
+      }
       
       peerConnection = await webrtcHandler.createPeerConnection();
       
@@ -686,7 +872,8 @@ async function handleIncomingCall(data) {
         id: data.callId,
         to: data.from,
         from: user.is.alias,
-        startTime: Date.now()
+        startTime: Date.now(),
+        isVideo: data.isVideo
       };
 
       const answerData = {
@@ -696,7 +883,8 @@ async function handleIncomingCall(data) {
         to: data.from,
         answerType: answer.type,
         answerSdp: answer.sdp,
-        time: currentCall.startTime
+        time: currentCall.startTime,
+        isVideo: data.isVideo
       };
 
       gun.get(`calls`).get(data.callId).put(answerData);
@@ -705,7 +893,8 @@ async function handleIncomingCall(data) {
       setupICECandidateListener(data.callId);
       
       startVoiceCallBtn.classList.add('hidden');
-      endVoiceCallBtn.classList.remove('hidden');
+      startVideoCallBtn.classList.add('hidden');
+      endCallBtn.classList.remove('hidden');
 
       // Send buffered ICE candidates
       sendBufferedICECandidates(data.callId);
@@ -715,14 +904,14 @@ async function handleIncomingCall(data) {
         if (peerConnection && peerConnection.iceConnectionState !== 'connected' && peerConnection.iceConnectionState !== 'completed') {
           console.log('Call setup timeout. Current ICE state:', peerConnection.iceConnectionState);
           alert('Call setup timed out. Please try again.');
-          endVoiceCall();
+          endCall();
         }
       }, 30000);  // 30 seconds timeout
 
     } catch (error) {
       console.error('Error accepting call:', error);
       alert(`Error accepting call: ${error.message}`);
-      endVoiceCall();
+      endCall();
     }
   } else {
     gun.get(`calls`).get(data.callId).put({ 
@@ -1106,7 +1295,7 @@ function loadGroupMessages(groupId) {
 function displayMessage(message, id) {
   if (message && !messagesDiv.querySelector(`[data-id="${id}"]`)) {
     const messageElement = document.createElement('div');
-    if (message.type === 'file') {
+    if (message.type === 'file' && message.content) {
       console.log(message);
       try {
         message.content = JSON.parse(message.content);
@@ -1161,3 +1350,7 @@ function displayImage(blob) {
 
 
 document.getElementById('sendFile').addEventListener('click', sendFile);
+
+startVoiceCallBtn.addEventListener('click', () => startCall(false));
+document.getElementById('startVideoCall').addEventListener('click', () => startCall(true));
+document.getElementById('endCall').addEventListener('click', endCall);
