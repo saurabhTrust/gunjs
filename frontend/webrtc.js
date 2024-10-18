@@ -105,27 +105,66 @@ class WebRTCHandler {
     return offer;
   }
 
+  // async handleIncomingCall(offer, stream) {
+  //   this.localStream = stream;
+  //   this.localStream.getTracks().forEach(track => {
+  //     console.log('Adding local track to peer connection:', track.kind);
+  //     this.peerConnection.addTrack(track, this.localStream);
+  //   });
+
+  //   await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+  //   console.log('Remote description set:', offer.type);
+
+  //   const answer = await this.peerConnection.createAnswer();
+  //   await this.peerConnection.setLocalDescription(answer);
+  //   console.log('Local description set:', answer.type);
+
+  //   // Add any buffered ICE candidates
+  //   for (const candidate of this.iceCandidates) {
+  //     await this.peerConnection.addIceCandidate(candidate);
+  //   }
+  //   this.iceCandidates = [];
+
+  //   return answer;
+  // }
   async handleIncomingCall(offer, stream) {
-    this.localStream = stream;
-    this.localStream.getTracks().forEach(track => {
-      console.log('Adding local track to peer connection:', track.kind);
-      this.peerConnection.addTrack(track, this.localStream);
-    });
+    try {
+      console.log('Handling incoming call. Current signaling state:', this.peerConnection.signalingState);
 
-    await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-    console.log('Remote description set:', offer.type);
+      if (this.peerConnection.signalingState !== 'stable') {
+        console.warn('PeerConnection is not in stable state. Current state:', this.peerConnection.signalingState);
+        // Optionally, you might want to close and recreate the peer connection here
+        // await this.recreatePeerConnection();
+      }
 
-    const answer = await this.peerConnection.createAnswer();
-    await this.peerConnection.setLocalDescription(answer);
-    console.log('Local description set:', answer.type);
+      this.localStream = stream;
+      this.localStream.getTracks().forEach(track => {
+        console.log('Adding local track to peer connection:', track.kind);
+        this.peerConnection.addTrack(track, this.localStream);
+      });
 
-    // Add any buffered ICE candidates
-    for (const candidate of this.iceCandidates) {
-      await this.peerConnection.addIceCandidate(candidate);
+      console.log('Setting remote description (offer)');
+      await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+      console.log('Remote description set:', offer.type);
+
+      console.log('Creating answer');
+      const answer = await this.peerConnection.createAnswer();
+      console.log('Setting local description (answer)');
+      await this.peerConnection.setLocalDescription(answer);
+      console.log('Local description set:', answer.type);
+
+      // Add any buffered ICE candidates
+      console.log(`Adding ${this.iceCandidates.length} buffered ICE candidates`);
+      for (const candidate of this.iceCandidates) {
+        await this.peerConnection.addIceCandidate(candidate);
+      }
+      this.iceCandidates = [];
+
+      return answer;
+    } catch (error) {
+      console.error('Error in handleIncomingCall:', error);
+      throw error;
     }
-    this.iceCandidates = [];
-
-    return answer;
   }
 }
 

@@ -682,10 +682,11 @@ function endCall() {
 function initializeWebRTC() {
   webrtcHandler = new WebRTCHandler(
     handleICECandidate,
-    (event) => {
-      console.log('Received remote track:', event.track.kind);
-      remoteAudio.srcObject = event.streams[0];
-    }
+    handleTrack
+    // (event) => {
+    //   console.log('Received remote track:', event.track.kind);
+    //   remoteAudio.srcObject = event.streams[0];
+    // }
   );
 }
 
@@ -1347,7 +1348,15 @@ function displayImage(blob) {
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
-
+function handleTrack(event) {
+  console.log('Received remote track:', event.track.kind);
+  if (event.track.kind === 'audio') {
+    remoteAudio.srcObject = event.streams[0];
+  } else if (event.track.kind === 'video') {
+    const remoteVideo = document.getElementById('remoteVideo');
+    remoteVideo.srcObject = event.streams[0];
+  }
+}
 
 document.getElementById('sendFile').addEventListener('click', sendFile);
 
