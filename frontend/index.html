@@ -208,7 +208,71 @@
             }
         });
 
+        function showCustomAlert(message) {
+            return new Promise((resolve) => {
+                const alertBox = document.getElementById('customAlert');
+                const alertMessage = document.getElementById('alertMessage');
+                const okButton = document.getElementById('alertOk');
 
+                alertMessage.textContent = message;
+                alertBox.classList.remove('hidden');
+                alertBox.classList.add('fade-in');
+
+                const closeAlert = () => {
+                    alertBox.classList.add('fade-out');
+                    setTimeout(() => {
+                        alertBox.classList.add('hidden');
+                        alertBox.classList.remove('fade-out');
+                        resolve();
+                    }, 300);
+                    okButton.removeEventListener('click', closeAlert);
+                };
+
+                okButton.addEventListener('click', closeAlert);
+            });
+        }
+
+        function showCustomConfirm(message) {
+            return new Promise((resolve) => {
+                const confirmBox = document.getElementById('customPrompt');
+                const confirmMessage = document.getElementById('promptMessage');
+                const inputSection = document.getElementById('promptInput');
+                const acceptButton = document.getElementById('promptOk');
+                const rejectButton = document.getElementById('promptCancel');
+
+                // Hide input field since it's a confirm dialog
+                inputSection.style.display = 'none';
+                
+                // Change button text
+                acceptButton.textContent = 'Accept';
+                rejectButton.textContent = 'Reject';
+                
+                confirmMessage.textContent = message;
+                confirmBox.classList.remove('hidden');
+                confirmBox.classList.add('fade-in');
+
+                const closeConfirm = (result) => {
+                    confirmBox.classList.add('fade-out');
+                    setTimeout(() => {
+                        confirmBox.classList.add('hidden');
+                        confirmBox.classList.remove('fade-out');
+                        // Reset input display and button text for future use
+                        inputSection.style.display = 'block';
+                        acceptButton.textContent = 'OK';
+                        rejectButton.textContent = 'Cancel';
+                        resolve(result);
+                    }, 300);
+                    acceptButton.removeEventListener('click', handleAccept);
+                    rejectButton.removeEventListener('click', handleReject);
+                };
+
+                const handleAccept = () => closeConfirm(true);
+                const handleReject = () => closeConfirm(false);
+
+                acceptButton.addEventListener('click', handleAccept);
+                rejectButton.addEventListener('click', handleReject);
+            });
+        }
     </script>
 </body>
 
