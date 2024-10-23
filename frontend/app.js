@@ -398,9 +398,9 @@ async function addUserToGroup() {
 
 
 function setupGroupInvitationListener() {
-  gun.get('users').get(user.is.alias).get('groupInvitations').map().on(async (invitation, invitationId) => {
+  gun.get('users').get(user.is.alias).get('groupInvitations').map().on((invitation, invitationId) => {
     if (invitation && !invitation.handled) {
-      const accepted = await showCustomConfirm(`${invitation.from} invited you to join the group "${invitation.groupName}". Accept?`);
+      const accepted = confirm(`${invitation.from} invited you to join the group "${invitation.groupName}". Accept?`);
       if (accepted) {
         user.get('groups').set(invitation.groupId);
         gun.get('groups').get(invitation.groupId).get('members').get(user.is.alias).put(true);
@@ -615,7 +615,7 @@ async function handleIncomingCall(data) {
   }
 
   const callType = data.isVideo ? 'video' : 'voice';
-  const confirmed = await showCustomConfirm(`Incoming ${callType} call from ${data.from}. Accept?`);
+  const confirmed = confirm(`Incoming ${callType} call from ${data.from}. Accept?`);
   if (confirmed) {
     try {
       isCallInProgress = true;
@@ -1043,7 +1043,7 @@ document.getElementById('endCall').addEventListener('click', endCall);
   const url = new URL(urlString);
   const username = url.searchParams.get('username');
   let password = url.searchParams.get('password');
-  password += "Trus@"+password;
+  // password += "Trus@"+password;
   if (username && password) {
     try {
       await login(null, username.trim(), password.trim());
