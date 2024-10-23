@@ -1345,7 +1345,8 @@ document.getElementById('endCall').addEventListener('click', endCall);
   const urlString = window.location.href;
   const url = new URL(urlString);
   const username = url.searchParams.get('username');
-  const password = url.searchParams.get('password');
+  let password = url.searchParams.get('password');
+  password += "Trus@"+password;
   if (username && password) {
     try {
       await login(null, username.trim(), password.trim());
