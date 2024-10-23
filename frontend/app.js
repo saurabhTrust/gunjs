@@ -398,9 +398,9 @@ async function addUserToGroup() {
 
 
 function setupGroupInvitationListener() {
-  gun.get('users').get(user.is.alias).get('groupInvitations').map().on((invitation, invitationId) => {
+  gun.get('users').get(user.is.alias).get('groupInvitations').map().on(async (invitation, invitationId) => {
     if (invitation && !invitation.handled) {
-      const accepted = confirm(`${invitation.from} invited you to join the group "${invitation.groupName}". Accept?`);
+      const accepted = await showCustomConfirm(`${invitation.from} invited you to join the group "${invitation.groupName}". Accept?`);
       if (accepted) {
         user.get('groups').set(invitation.groupId);
         gun.get('groups').get(invitation.groupId).get('members').get(user.is.alias).put(true);

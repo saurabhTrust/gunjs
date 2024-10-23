@@ -48,11 +48,11 @@
                 </div>
             </div>
             <div id="chatRoom" class="chat-room">
-                <button id="backButton" class="back-button hidden">
+                <button id="backButton" class="back-button">
                     <i class="fas fa-arrow-left"></i>
                 </button>
                 <div id="callControls" class="hidden">
-                    <h2 id="currentChatHeader" class="title">Select a contact or group to start chatting</h2>
+                    <h2 id="currentChatHeader" class="title title-chatroom">Select a contact or group to start chatting</h2>
                     <button id="startVoiceCall" type="button" class="recendButton primary-button-style"><i
                             class="fas fa-phone"></i></button>
                     <button id="startVideoCall" type="button" class="recendButton primary-button-style"><i class="fas fa-video"></i></button>
@@ -123,6 +123,7 @@
             document.getElementById('messageControls').style.display = 'flex';
             document.getElementById('groupControls').style.display = 'none';
             document.getElementById('startVoiceCall').classList.remove('hidden');
+            document.getElementById('startVideoCall').classList.remove('hidden');
         }
 
         function showGroupRoom() {
@@ -130,10 +131,10 @@
             document.getElementById('messageControls').style.display = 'flex';
             document.getElementById('groupControls').style.display = 'flex';
             document.getElementById('startVoiceCall').classList.add('hidden');
+            document.getElementById('startVideoCall').classList.add('hidden');
         }
 
-        // Add this function call when a contact or group is selected
-        // For example:
+
         document.getElementById('contactsList').addEventListener('click', (e) => {
             if (e.target.classList.contains('contact')) {
                 showChatRoom();
@@ -145,34 +146,40 @@
             }
         });
 
-        const backButton = document.getElementById('backButton');
-        const sidebar = document.getElementById('sidebar');
-        const chatRoom = document.getElementById('chatRoom');
-
-        // Function to check if we're on mobile
         function isMobile() {
             return window.innerWidth <= 768;
         }
 
-        // Function to show chat and hide sidebar on mobile
         function showChatOnMobile() {
             if (isMobile()) {
+                const sidebar = document.getElementById('sidebar');
+                const chatRoom = document.getElementById('chatRoom');
+                const backButton = document.getElementById('backButton');
+                
                 sidebar.classList.add('hidden-mobile');
                 chatRoom.classList.add('visible-mobile');
                 backButton.classList.remove('hidden');
+                
+                // Focus on message input if it exists
+                const messageInput = document.getElementById('messageInput');
+                if (messageInput) {
+                    setTimeout(() => messageInput.focus(), 300);
+                }
             }
         }
 
-        // Function to show sidebar and hide chat on mobile
         function showSidebarOnMobile() {
             if (isMobile()) {
+                const sidebar = document.getElementById('sidebar');
+                const chatRoom = document.getElementById('chatRoom');
+                const backButton = document.getElementById('backButton');
+                
                 sidebar.classList.remove('hidden-mobile');
                 chatRoom.classList.remove('visible-mobile');
                 backButton.classList.add('hidden');
             }
         }
 
-        // Update click handlers for contacts and groups
         document.getElementById('contactsList').addEventListener('click', (e) => {
             if (e.target.classList.contains('contact')) {
                 showChatRoom();
@@ -187,83 +194,20 @@
             }
         });
 
-        // Back button click handler
-        backButton.addEventListener('click', showSidebarOnMobile);
+        document.getElementById('backButton').addEventListener('click', showSidebarOnMobile);
 
-        // Handle window resize
         window.addEventListener('resize', () => {
             if (!isMobile()) {
+                const sidebar = document.getElementById('sidebar');
+                const chatRoom = document.getElementById('chatRoom');
+                const backButton = document.getElementById('backButton');
+                
                 sidebar.classList.remove('hidden-mobile');
                 chatRoom.classList.remove('visible-mobile');
                 backButton.classList.add('hidden');
             }
         });
 
-        function showCustomAlert(message) {
-            return new Promise((resolve) => {
-                const alertBox = document.getElementById('customAlert');
-                const alertMessage = document.getElementById('alertMessage');
-                const okButton = document.getElementById('alertOk');
-
-                alertMessage.textContent = message;
-                alertBox.classList.remove('hidden');
-                alertBox.classList.add('fade-in');
-
-                const closeAlert = () => {
-                    alertBox.classList.add('fade-out');
-                    setTimeout(() => {
-                        alertBox.classList.add('hidden');
-                        alertBox.classList.remove('fade-out');
-                        resolve();
-                    }, 300);
-                    okButton.removeEventListener('click', closeAlert);
-                };
-
-                okButton.addEventListener('click', closeAlert);
-            });
-        }
-
-        function showCustomConfirm(message) {
-            return new Promise((resolve) => {
-                const confirmBox = document.getElementById('customPrompt');
-                const confirmMessage = document.getElementById('promptMessage');
-                const inputSection = document.getElementById('promptInput');
-                const acceptButton = document.getElementById('promptOk');
-                const rejectButton = document.getElementById('promptCancel');
-
-                // Hide input field since it's a confirm dialog
-                inputSection.style.display = 'none';
-                
-                // Change button text
-                acceptButton.textContent = 'Accept';
-                rejectButton.textContent = 'Reject';
-                
-                confirmMessage.textContent = message;
-                confirmBox.classList.remove('hidden');
-                confirmBox.classList.add('fade-in');
-
-                const closeConfirm = (result) => {
-                    confirmBox.classList.add('fade-out');
-                    setTimeout(() => {
-                        confirmBox.classList.add('hidden');
-                        confirmBox.classList.remove('fade-out');
-                        // Reset input display and button text for future use
-                        inputSection.style.display = 'block';
-                        acceptButton.textContent = 'OK';
-                        rejectButton.textContent = 'Cancel';
-                        resolve(result);
-                    }, 300);
-                    acceptButton.removeEventListener('click', handleAccept);
-                    rejectButton.removeEventListener('click', handleReject);
-                };
-
-                const handleAccept = () => closeConfirm(true);
-                const handleReject = () => closeConfirm(false);
-
-                acceptButton.addEventListener('click', handleAccept);
-                rejectButton.addEventListener('click', handleReject);
-            });
-        }
 
     </script>
 </body>
