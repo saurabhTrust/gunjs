@@ -52,7 +52,7 @@
  }
 
  .title-chatroom{
-    margin-left: 40px;
+    margin-left: 20px;
  }
 
  .input-box-style {
@@ -375,7 +375,6 @@
     top: 10px;
     left: 10px;
     z-index: 100;
-    margin-right: 20px;
 }
 
 .back-button:hover {
@@ -438,6 +437,7 @@
 .danger {
     background-color: red;
 }
+
 @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
