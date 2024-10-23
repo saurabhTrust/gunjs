@@ -12,6 +12,7 @@ let isCallInProgress = false;
 let localICECandidates = [];
 let currentCall = null;
 let isVideoCall = false;
+let notificationService;
 
 // DOM Elements
 const authDiv = document.getElementById('auth');
@@ -42,9 +43,9 @@ const endCallBtn = document.getElementById('endCall');
 
 
 
-function register() {
-  const username = usernameInput.value.trim();
-  const password = passwordInput.value;
+function register(e, loginUser, pass) {
+  const username = loginUser || usernameInput.value.trim();
+  const password = pass || passwordInput.value;
   
   if (!username || !password) {
     alert('Please enter both username and password');
@@ -52,32 +53,43 @@ function register() {
   }
   
   user = gun.user();
-  user.create(username, password, (ack) => {
-    if (ack.err) {
-      alert(ack.err);
-    } else {
-      // Store the user's public data
-      gun.get('users').get(username).put({ username: username });
-      alert('Registration successful. You can now log in.');
-    }
-  });
+  return new Promise((resolve, reject) => {
+    user.create(username, password, (ack) => {
+      if (ack.err) {
+        console.log(ack.err);
+        reject(new Error("registration Failed"));
+        // alert(ack.err);
+      } else {
+        // Store the user's public data
+        gun.get('users').get(username).put({ username: username });
+        console.log('Registration successful. You can now log in.');
+        resolve(true);
+        // alert('Registration successful. You can now log in.');
+      }
+    });
+  })
 }
 
-function login() {
-  const username = usernameInput.value.trim();
-  const password = passwordInput.value;
-  
+function login(e, loginUser, pass) {
+  const username = loginUser || usernameInput.value.trim();
+  const password = pass || passwordInput.value;
+  console.log(username, password);
   user = gun.user();
-  user.auth(username, password, (ack) => {
-    if (ack.err) {
-      alert(ack.err);
-    } else {
-      console.log("User authenticated:", user.is.alias);
-      // Store/update the user's public data
-      gun.get('users').get(username).put({ username: username });
-      initializeApp();
-    }
-  });
+  return new Promise((resolve, reject) => {
+    user.auth(username, password, (ack) => {
+      if (ack.err) {
+        console.log(ack.err);
+        reject(new Error("Login Failed"))
+        // alert(ack.err);
+      } else {
+        console.log("User authenticated:", user.is.alias);
+        // Store/update the user's public data
+        gun.get('users').get(username).put({ username: username });
+        initializeApp();
+        resolve(true);
+      }
+    });
+  })
 }
 
 function loadContacts() {
@@ -96,13 +108,6 @@ function loadContacts() {
   });
 }
 
-// function startChat(contactAlias) {
-//   currentChat = contactAlias;
-//   currentChatHeader.textContent = `Chat with ${contactAlias}`;
-//   messagesDiv.innerHTML = '';
-//   messageControls.classList.remove('hidden');
-//   loadMessages(contactAlias);
-// }
 
 function startChat(contactAlias) {
   currentChat = contactAlias;
@@ -116,32 +121,6 @@ function startChat(contactAlias) {
   loadMessages(contactAlias);
 }
 
-// function loadMessages(contactAlias) {
-//   const chatId = getChatId(user.is.alias, contactAlias);
-//   gun.get(`chats`).get(chatId).map().on((message, id) => {
-//     if (message && !messagesDiv.querySelector(`[data-id="${id}"]`)) {
-//       const messageElement = document.createElement('div');
-//       messageElement.textContent = `${message.sender}: ${message.content}`;
-//       messageElement.dataset.id = id;
-//       messageElement.classList.add('message', message.sender === user.is.alias ? 'sent' : 'received');
-//       messagesDiv.appendChild(messageElement);
-//       messagesDiv.scrollTop = messagesDiv.scrollHeight;
-//     }
-//   });
-// }
-
-// function sendMessage() {
-//   const content = messageInput.value.trim();
-//   if (content && currentChat) {
-//     const chatId = getChatId(user.is.alias, currentChat);
-//     gun.get(`chats`).get(chatId).set({
-//       sender: user.is.alias,
-//       content: content,
-//       timestamp: Date.now()
-//     });
-//     messageInput.value = '';
-//   }
-// }
 
 function sendMessage() {
   const content = messageInput.value.trim();
@@ -151,13 +130,15 @@ function sendMessage() {
       gun.get(`chats`).get(chatId).set({
         sender: user.is.alias,
         content: content,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        notified: false
       });
     } else if (currentChatType === 'group') {
       gun.get(`groupChats`).get(currentChat).set({
         sender: user.is.alias,
         content: content,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        notified: false
       });
     }
     messageInput.value = '';
@@ -216,8 +197,8 @@ function getChatId(user1, user2) {
 }
 
 // Event Listeners
-registerBtn.addEventListener('click', register);
-loginBtn.addEventListener('click', login);
+// registerBtn.addEventListener('click', register);
+// loginBtn.addEventListener('click', login);
 sendMessageBtn.addEventListener('click', sendMessage);
 addContactBtn.addEventListener('click', addContact);
 
@@ -241,10 +222,6 @@ function initializeApp() {
     authDiv.classList.add('hidden');
     chatDiv.classList.remove('hidden');
     chatDiv.style.display = "flex";
-    //loadContacts();
-    //setupContactRequestListener();
-    //setupContactAcceptanceListener(); 
-
     loadContacts();
     loadGroups();
     setupContactRequestListener();
@@ -710,7 +687,7 @@ gun.on('auth', () => {
   gun.get(`calls`).map().on(async (data, key) => {
     if (!data || !data.to || data.to !== user.is.alias) return;
     
-    console.log('Received call data:', data);
+    // console.log('Received call data:', data);
     
     if (data.type === 'ice') {
       handleIncomingIceCandidate(key, data);
@@ -1363,3 +1340,19 @@ document.getElementById('sendFile').addEventListener('click', sendFile);
 startVoiceCallBtn.addEventListener('click', () => startCall(false));
 document.getElementById('startVideoCall').addEventListener('click', () => startCall(true));
 document.getElementById('endCall').addEventListener('click', endCall);
+
+(async function () {
+  const urlString = window.location.href;
+  const url = new URL(urlString);
+  const username = url.searchParams.get('username');
+  const password = url.searchParams.get('password');
+  if (username && password) {
+    try {
+      await login(null, username.trim(), password.trim());
+    } catch (err) {
+      console.log(err);
+      await register(null, username.trim(), password.trim());
+      await login(null, username.trim(), password.trim());
+    } 
+  }
+})();
