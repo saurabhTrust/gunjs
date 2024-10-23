@@ -1,74 +1,3 @@
-<!-- <!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <title>Decentralized End-to-End Messenger</title>
-    <link rel="stylesheet" href="styles.css">
-    <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/ipfs-http-client/dist/index.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/eccrypto/dist/eccrypto.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/file-type/browser.min.js"></script>
-</head>
-
-<body>
-    <div id="app">
-        <h1>Decentralized End-to-End Messenger</h1>
-
-        <div id="auth">
-            <input type="text" id="username" placeholder="Enter Username">
-            <input type="password" id="password" placeholder="Enter Password" value="Guess@007000">
-            <small>Password must be at least 12 characters long and contain at least one lowercase letter, one uppercase
-                letter, one number, and one special character.</small>
-            <button id="login">Login</button>
-            <button id="register">Register</button>
-        </div>
-
-        <div id="chat" class="hidden">
-            <div id="sidebar">
-                <div id="contacts">
-                    <h2>Contacts</h2>
-                    <div id="contactsList"></div>
-                    <input type="text" id="newContactInput" placeholder="Enter username to add">
-                    <button id="addContact">Add Contact</button>
-                </div>
-
-                <div id="groups">
-                    <h2>Groups</h2>
-                    <div id="groupsList"></div>
-                    <input type="text" id="newGroupName" placeholder="Enter group name">
-                    <button id="createGroup">Create Group</button>
-                </div>
-            </div>
-
-            <div id="chatRoom">
-                <h2 id="currentChatHeader">Select a contact or group to start chatting</h2>
-                <div id="callControls" class="hidden">
-                    <button id="startVoiceCall">Start Voice Call</button>
-                    <button id="endVoiceCall" class="hidden">End Call</button>
-                </div>
-                <div id="messages"></div>
-                <div id="messageControls" class="hidden">
-                    <input type="text" id="messageInput" placeholder="Type a message">
-                    <button id="sendMessage">Send</button>
-                    <input type="file" id="fileInput">
-                    <button id="sendFile">Send File</button>
-                </div>
-                <div id="groupControls" class="hidden">
-                    <input type="text" id="addToGroupInput" placeholder="Enter username to add to group">
-                    <button id="addToGroup">Add to Group</button>
-                </div>
-            </div>
-        </div>
-    </div>
-    <audio id="remoteAudio" autoplay></audio>
-    <script src="webrtc.js"></script>
-    <script src="app.js"></script>
-</body>
-
-</html> -->
-
 <!DOCTYPE html>
 <html lang="en">
 
@@ -119,6 +48,9 @@
                 </div>
             </div>
             <div id="chatRoom" class="chat-room">
+                <button id="backButton" class="back-button hidden">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
                 <div id="callControls" class="hidden">
                     <h2 id="currentChatHeader" class="title">Select a contact or group to start chatting</h2>
                     <button id="startVoiceCall" type="button" class="recendButton primary-button-style"><i
@@ -151,6 +83,22 @@
         </div>
     </div>
     <audio id="remoteAudio" autoplay></audio>
+    <div id="customAlert" class="custom-dialog hidden">
+        <div class="dialog-content">
+            <p id="alertMessage"></p>
+            <button class="primary-button-style" id="alertOk">OK</button>
+        </div>
+    </div>
+    <div id="customPrompt" class="custom-dialog hidden">
+        <div class="dialog-content">
+            <p id="promptMessage"></p>
+            <input type="text" id="promptInput" class="input-box-style">
+            <div class="dialog-buttons">
+                <button class="primary-button-style" id="promptOk">Accept</button>
+                <button class="primary-button-style danger" id="promptCancel">Reject</button>
+            </div>
+        </div>
+    </div>
     <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/ipfs-http-client/dist/index.min.js"></script>
@@ -196,6 +144,127 @@
                 showGroupRoom();
             }
         });
+
+        const backButton = document.getElementById('backButton');
+        const sidebar = document.getElementById('sidebar');
+        const chatRoom = document.getElementById('chatRoom');
+
+        // Function to check if we're on mobile
+        function isMobile() {
+            return window.innerWidth <= 768;
+        }
+
+        // Function to show chat and hide sidebar on mobile
+        function showChatOnMobile() {
+            if (isMobile()) {
+                sidebar.classList.add('hidden-mobile');
+                chatRoom.classList.add('visible-mobile');
+                backButton.classList.remove('hidden');
+            }
+        }
+
+        // Function to show sidebar and hide chat on mobile
+        function showSidebarOnMobile() {
+            if (isMobile()) {
+                sidebar.classList.remove('hidden-mobile');
+                chatRoom.classList.remove('visible-mobile');
+                backButton.classList.add('hidden');
+            }
+        }
+
+        // Update click handlers for contacts and groups
+        document.getElementById('contactsList').addEventListener('click', (e) => {
+            if (e.target.classList.contains('contact')) {
+                showChatRoom();
+                showChatOnMobile();
+            }
+        });
+
+        document.getElementById('groupsList').addEventListener('click', (e) => {
+            if (e.target.classList.contains('group')) {
+                showGroupRoom();
+                showChatOnMobile();
+            }
+        });
+
+        // Back button click handler
+        backButton.addEventListener('click', showSidebarOnMobile);
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (!isMobile()) {
+                sidebar.classList.remove('hidden-mobile');
+                chatRoom.classList.remove('visible-mobile');
+                backButton.classList.add('hidden');
+            }
+        });
+
+        function showCustomAlert(message) {
+            return new Promise((resolve) => {
+                const alertBox = document.getElementById('customAlert');
+                const alertMessage = document.getElementById('alertMessage');
+                const okButton = document.getElementById('alertOk');
+
+                alertMessage.textContent = message;
+                alertBox.classList.remove('hidden');
+                alertBox.classList.add('fade-in');
+
+                const closeAlert = () => {
+                    alertBox.classList.add('fade-out');
+                    setTimeout(() => {
+                        alertBox.classList.add('hidden');
+                        alertBox.classList.remove('fade-out');
+                        resolve();
+                    }, 300);
+                    okButton.removeEventListener('click', closeAlert);
+                };
+
+                okButton.addEventListener('click', closeAlert);
+            });
+        }
+
+        function showCustomConfirm(message) {
+            return new Promise((resolve) => {
+                const confirmBox = document.getElementById('customPrompt');
+                const confirmMessage = document.getElementById('promptMessage');
+                const inputSection = document.getElementById('promptInput');
+                const acceptButton = document.getElementById('promptOk');
+                const rejectButton = document.getElementById('promptCancel');
+
+                // Hide input field since it's a confirm dialog
+                inputSection.style.display = 'none';
+                
+                // Change button text
+                acceptButton.textContent = 'Accept';
+                rejectButton.textContent = 'Reject';
+                
+                confirmMessage.textContent = message;
+                confirmBox.classList.remove('hidden');
+                confirmBox.classList.add('fade-in');
+
+                const closeConfirm = (result) => {
+                    confirmBox.classList.add('fade-out');
+                    setTimeout(() => {
+                        confirmBox.classList.add('hidden');
+                        confirmBox.classList.remove('fade-out');
+                        // Reset input display and button text for future use
+                        inputSection.style.display = 'block';
+                        acceptButton.textContent = 'OK';
+                        rejectButton.textContent = 'Cancel';
+                        resolve(result);
+                    }, 300);
+                    acceptButton.removeEventListener('click', handleAccept);
+                    rejectButton.removeEventListener('click', handleReject);
+                };
+
+                const handleAccept = () => closeConfirm(true);
+                const handleReject = () => closeConfirm(false);
+
+                acceptButton.addEventListener('click', handleAccept);
+                rejectButton.addEventListener('click', handleReject);
+            });
+        }
+
     </script>
 </body>
 

@@ -43,12 +43,12 @@ const endCallBtn = document.getElementById('endCall');
 
 
 
-function register(e, loginUser, pass) {
+async function register(e, loginUser, pass) {
   const username = loginUser || usernameInput.value.trim();
   const password = pass || passwordInput.value;
   
   if (!username || !password) {
-    alert('Please enter both username and password');
+    await showCustomAlert('Please enter both username and password');
     return;
   }
   
@@ -58,13 +58,11 @@ function register(e, loginUser, pass) {
       if (ack.err) {
         console.log(ack.err);
         reject(new Error("registration Failed"));
-        // alert(ack.err);
       } else {
         // Store the user's public data
         gun.get('users').get(username).put({ username: username });
         console.log('Registration successful. You can now log in.');
         resolve(true);
-        // alert('Registration successful. You can now log in.');
       }
     });
   })
@@ -80,7 +78,6 @@ function login(e, loginUser, pass) {
       if (ack.err) {
         console.log(ack.err);
         reject(new Error("Login Failed"))
-        // alert(ack.err);
       } else {
         console.log("User authenticated:", user.is.alias);
         // Store/update the user's public data
@@ -149,7 +146,7 @@ function sendMessage() {
 function addContact() {
   const newContact = newContactInput.value.trim();
   if (newContact && newContact !== user.is.alias) {
-    gun.get('users').get(newContact).once((userData) => {
+    gun.get('users').get(newContact).once(async (userData) => {
       console.log("Looking up user:", newContact, "Result:", userData);
       if (userData && userData.username) {
         // User exists, send a contact request
@@ -160,9 +157,9 @@ function addContact() {
           console.log("Contact request sent:", ack);
         });
         newContactInput.value = '';
-        alert(`Contact request sent to ${newContact}`);
+        await showCustomAlert(`Contact request sent to ${newContact}`);
       } else {
-        alert(`User ${newContact} does not exist.`);
+        await showCustomAlert(`User ${newContact} does not exist.`);
       }
     });
   }
@@ -170,10 +167,10 @@ function addContact() {
 
 function listenForContactRequests() {
   console.log("I am running");
-  user.get('contactRequests').map().on((request, requestId) => {
+  user.get('contactRequests').map().on(async (request, requestId) => {
     console.log(request)
     if (request && request.from && !request.handled) {
-      const confirmed = confirm(`${request.from} wants to add you as a contact. Accept?`);
+      const confirmed = await showCustomConfirm(`${request.from} wants to add you as a contact. Accept?`);
       if (confirmed) {
         // Add the contact for both users
         user.get('contacts').get(request.from).put({ alias: request.from });
@@ -240,46 +237,10 @@ function setupContactRequestListener() {
   });
 }
 
-// function handleContactRequest(request, requestId) {
-//   console.log("Handling contact request:", request, requestId);
-//   const confirmed = confirm(`${request.from} wants to add you as a contact. Accept?`);
-//   if (confirmed) {
-//     // Add the contact for the current user
-//     user.get('contacts').get(request.from).put({ alias: request.from }, (ack) => {
-//       console.log("Added contact for current user:", ack);
-//     });
 
-//     // Add the current user as a contact for the requester
-//     gun.get('users').get(request.from).get('contacts').get(user.is.alias).put({ alias: user.is.alias }, (ack) => {
-//       console.log("Added current user as contact for requester:", ack);
-//     });
-    
-//     // Remove the contact request
-//     gun.get('users').get(user.is.alias).get('contactRequests').get(requestId).put(null, (ack) => {
-//       console.log("Removed contact request:", ack);
-//     });
-    
-//     // Refresh the contacts list
-//     loadContacts();
-
-//     // Send acknowledgment to the requester
-//     gun.get('users').get(request.from).get('contactAcceptances').set({
-//       from: user.is.alias,
-//       timestamp: Date.now()
-//     });
-
-//     alert(`You are now connected with ${request.from}`);
-//   } else {
-//     // If rejected, just mark as handled
-//     gun.get('users').get(user.is.alias).get('contactRequests').get(requestId).put({...request, handled: true}, (ack) => {
-//       console.log("Marked contact request as handled:", ack);
-//     });
-//   }
-// }
-
-function handleContactRequest(request, requestId) {
+async function handleContactRequest(request, requestId) {
   console.log("Handling contact request:", request, requestId);
-  const confirmed = confirm(`${request.from} wants to add you as a contact. Accept?`);
+  const confirmed = await showCustomConfirm(`${request.from} wants to add you as a contact. Accept?`);
   if (confirmed) {
     // Add the contact for the current user
     user.get('contacts').get(request.from).put({ alias: request.from }, (ack) => {
@@ -305,7 +266,7 @@ function handleContactRequest(request, requestId) {
       timestamp: Date.now()
     });
 
-    alert(`You are now connected with ${request.from}`);
+    await showCustomAlert(`You are now connected with ${request.from}`);
   } else {
     // If rejected, remove the request instead of marking it as handled
     gun.get('users').get(user.is.alias).get('contactRequests').get(requestId).put(null, (ack) => {
@@ -317,7 +278,7 @@ function handleContactRequest(request, requestId) {
 
 function setupContactAcceptanceListener() {
   console.log("Setting up contact acceptance listener for", user.is.alias);
-  gun.get('users').get(user.is.alias).get('contactAcceptances').map().on((acceptance, acceptanceId) => {
+  gun.get('users').get(user.is.alias).get('contactAcceptances').map().on(async (acceptance, acceptanceId) => {
     console.log("Received contact acceptance:", acceptance, acceptanceId);
     if (acceptance && acceptance.from) {
       // Add the contact to the sender's list
@@ -331,7 +292,7 @@ function setupContactAcceptanceListener() {
       // Refresh the contacts list
       loadContacts();
       
-      alert(`${acceptance.from} has accepted your contact request!`);
+      await showCustomAlert(`${acceptance.from} has accepted your contact request!`);
     }
   });
 }
@@ -347,14 +308,14 @@ function createGroup() {
       createdAt: Date.now()
     };
     
-    gun.get('groups').get(groupId).put(groupData, (ack) => {
+    gun.get('groups').get(groupId).put(groupData, async (ack) => {
       if (ack.err) {
-        alert('Error creating group: ' + ack.err);
+        await showCustomAlert('Error creating group: ' + ack.err);
       } else {
         user.get('groups').set(groupId);
         newGroupNameInput.value = '';
         loadGroups();
-        alert('Group created successfully!');
+        await showCustomAlert('Group created successfully!');
       }
     });
   }
@@ -403,15 +364,15 @@ function startGroupChat(groupId, groupName) {
 //   });
 // }
 
-function addUserToGroup() {
+async function addUserToGroup() {
   const username = addToGroupInput.value.trim();
   if (username && currentChat && currentChatType === 'group') {
-    gun.get('groups').get(currentChat).once((groupData) => {
+    gun.get('groups').get(currentChat).once(async (groupData) => {
       if (groupData.creator === user.is.alias) {
         if (!groupData.members[username]) {
-          gun.get('groups').get(currentChat).get('members').get(username).put(true, (ack) => {
+          gun.get('groups').get(currentChat).get('members').get(username).put(true, async (ack) => {
             if (ack.err) {
-              alert('Error adding user to group: ' + ack.err);
+              await showCustomAlert('Error adding user to group: ' + ack.err);
             } else {
               // Send group invitation
               gun.get('users').get(username).get('groupInvitations').set({
@@ -422,37 +383,24 @@ function addUserToGroup() {
               });
               
               addToGroupInput.value = '';
-              alert(`Invitation sent to ${username}`);
+              await showCustomAlert(`Invitation sent to ${username}`);
             }
           });
         } else {
-          alert(`${username} is already a member of this group`);
+          await showCustomAlert(`${username} is already a member of this group`);
         }
       } else {
-        alert('Only the group creator can add new members');
+        await showCustomAlert('Only the group creator can add new members');
       }
     });
   }
 }
 
-// function setupGroupInvitationListener() {
-//   gun.get('users').get(user.is.alias).get('groupInvitations').map().on((invitation, invitationId) => {
-//     if (invitation && !invitation.handled) {
-//       const accepted = confirm(`${invitation.from} invited you to join the group "${invitation.groupName}". Accept?`);
-//       if (accepted) {
-//         user.get('groups').set(invitation.groupId);
-//         gun.get('groups').get(invitation.groupId).get('members').get(user.is.alias).put(true);
-//         loadGroups();
-//       }
-//       gun.get('users').get(user.is.alias).get('groupInvitations').get(invitationId).put({...invitation, handled: true});
-//     }
-//   });
-// }
 
 function setupGroupInvitationListener() {
-  gun.get('users').get(user.is.alias).get('groupInvitations').map().on((invitation, invitationId) => {
+  gun.get('users').get(user.is.alias).get('groupInvitations').map().on(async (invitation, invitationId) => {
     if (invitation && !invitation.handled) {
-      const accepted = confirm(`${invitation.from} invited you to join the group "${invitation.groupName}". Accept?`);
+      const accepted = await showCustomConfirm(`${invitation.from} invited you to join the group "${invitation.groupName}". Accept?`);
       if (accepted) {
         user.get('groups').set(invitation.groupId);
         gun.get('groups').get(invitation.groupId).get('members').get(user.is.alias).put(true);
@@ -472,93 +420,10 @@ function setupGroupInvitationListener() {
   });
 }
 
-// async function startVoiceCall() {
-//   if (isCallInProgress || currentChatType !== 'direct') {
-//     alert('A call is already in progress or you\'re not in a direct chat.');
-//     return;
-//   }
-
-//   try {
-//     isCallInProgress = true;
-//     localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-//     console.log('Local stream obtained:', localStream.getTracks());
-    
-//     peerConnection = await webrtcHandler.createPeerConnection();
-//     const offer = await webrtcHandler.startCall(localStream);
-    
-//     const callId = Date.now().toString();
-//     currentCall = {
-//       id: callId,
-//       to: currentChat,
-//       from: user.is.alias,
-//       startTime: Date.now()
-//     };
-
-//     const offerData = {
-//       type: 'offer',
-//       callId: callId,
-//       from: user.is.alias,
-//       to: currentChat,
-//       offerType: offer.type,
-//       offerSdp: offer.sdp,
-//       startTime: currentCall.startTime
-//     };
-
-//     gun.get(`calls`).get(callId).put(offerData);
-//     console.log('Offer sent:', offerData);
-
-//     setupICECandidateListener(callId);
-    
-//     startVoiceCallBtn.classList.add('hidden');
-//     endVoiceCallBtn.classList.remove('hidden');
-
-//     // Set a timeout to check if the call was established
-//     setTimeout(() => {
-//       if (peerConnection && peerConnection.iceConnectionState !== 'connected' && peerConnection.iceConnectionState !== 'completed') {
-//         console.log('Call setup timeout. Current ICE state:', peerConnection.iceConnectionState);
-//         alert('Call setup timed out. Please try again.');
-//         endVoiceCall();
-//       }
-//     }, 30000);  // 30 seconds timeout
-
-//   } catch (error) {
-//     console.error('Error starting voice call:', error);
-//     alert('Error starting voice call: ' + error.message);
-//     isCallInProgress = false;
-//     if (localStream) {
-//       localStream.getTracks().forEach(track => track.stop());
-//     }
-//     currentCall = null;
-//   }
-// }
-
-// function endVoiceCall() {
-//   if (peerConnection) {
-//     peerConnection.close();
-//     peerConnection = null;
-//   }
-//   if (localStream) {
-//     localStream.getTracks().forEach(track => track.stop());
-//     localStream = null;
-//   }
-//   remoteAudio.srcObject = null;
-//   if (currentCall) {
-//     gun.get(`calls`).get(currentCall.id).put({ 
-//       type: 'end',
-//       from: user.is.alias,
-//       to: currentCall.to,
-//       endTime: Date.now()
-//     });
-//     currentCall = null;
-//   }
-//   isCallInProgress = false;
-//   startVoiceCallBtn.classList.remove('hidden');
-//   endVoiceCallBtn.classList.add('hidden');
-// }
 
 async function startCall(withVideo = false) {
   if (isCallInProgress || currentChatType !== 'direct') {
-    alert('A call is already in progress or you\'re not in a direct chat.');
+    await showCustomAlert('A call is already in progress or you\'re not in a direct chat.');
     return;
   }
 
@@ -607,17 +472,17 @@ async function startCall(withVideo = false) {
     endCallBtn.classList.remove('hidden');
 
     // Set a timeout to check if the call was established
-    setTimeout(() => {
+    setTimeout(async () => {
       if (peerConnection && peerConnection.iceConnectionState !== 'connected' && peerConnection.iceConnectionState !== 'completed') {
         console.log('Call setup timeout. Current ICE state:', peerConnection.iceConnectionState);
-        alert('Call setup timed out. Please try again.');
+        await showCustomAlert('Call setup timed out. Please try again.');
         endCall();
       }
     }, 30000);  // 30 seconds timeout
 
   } catch (error) {
     console.error('Error starting call:', error);
-    alert('Error starting call: ' + error.message);
+    await showCustomAlert('Error starting call: ' + error.message);
     isCallInProgress = false;
     if (localStream) {
       localStream.getTracks().forEach(track => track.stop());
@@ -742,79 +607,6 @@ function checkAudioLevels(stream, label) {
   checkLevel();
 }
 
-// async function handleIncomingCall(data) {
-//   if (isCallInProgress) {
-//     console.log('Already in a call, ignoring incoming call');
-//     return;
-//   }
-
-//   const confirmed = confirm(`Incoming call from ${data.from}. Accept?`);
-//   if (confirmed) {
-//     try {
-//       isCallInProgress = true;
-//       localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-//       console.log('Local stream obtained:', localStream.getTracks());
-      
-//       peerConnection = await webrtcHandler.createPeerConnection();
-      
-//       const offer = {
-//         type: data.offerType,
-//         sdp: data.offerSdp
-//       };
-
-//       const answer = await webrtcHandler.handleIncomingCall(offer, localStream);
-      
-//       currentCall = {
-//         id: data.callId,
-//         to: data.from,
-//         from: user.is.alias,
-//         startTime: Date.now()
-//       };
-
-//       const answerData = {
-//         type: 'answer',
-//         callId: data.callId,
-//         from: user.is.alias,
-//         to: data.from,
-//         answerType: answer.type,
-//         answerSdp: answer.sdp,
-//         time: currentCall.startTime
-//       };
-
-//       gun.get(`calls`).get(data.callId).put(answerData);
-//       console.log('Answer sent:', answerData);
-
-//       setupICECandidateListener(data.callId);
-      
-//       startVoiceCallBtn.classList.add('hidden');
-//       endVoiceCallBtn.classList.remove('hidden');
-
-//       // Send buffered ICE candidates
-//       sendBufferedICECandidates(data.callId);
-
-//       // Set a timeout to check if the call was established
-//       setTimeout(() => {
-//         if (peerConnection && peerConnection.iceConnectionState !== 'connected' && peerConnection.iceConnectionState !== 'completed') {
-//           console.log('Call setup timeout. Current ICE state:', peerConnection.iceConnectionState);
-//           alert('Call setup timed out. Please try again.');
-//           endVoiceCall();
-//         }
-//       }, 30000);  // 30 seconds timeout
-
-//     } catch (error) {
-//       console.error('Error accepting call:', error);
-//       alert(`Error accepting call: ${error.message}`);
-//       endVoiceCall();
-//     }
-//   } else {
-//     gun.get(`calls`).get(data.callId).put({ 
-//       type: 'reject',
-//       from: user.is.alias,
-//       to: data.from,
-//       time: Date.now()
-//     });
-//   }
-// }
 
 async function handleIncomingCall(data) {
   if (isCallInProgress) {
@@ -823,7 +615,7 @@ async function handleIncomingCall(data) {
   }
 
   const callType = data.isVideo ? 'video' : 'voice';
-  const confirmed = confirm(`Incoming ${callType} call from ${data.from}. Accept?`);
+  const confirmed = await showCustomConfirm(`Incoming ${callType} call from ${data.from}. Accept?`);
   if (confirmed) {
     try {
       isCallInProgress = true;
@@ -878,17 +670,17 @@ async function handleIncomingCall(data) {
       sendBufferedICECandidates(data.callId);
 
       // Set a timeout to check if the call was established
-      setTimeout(() => {
+      setTimeout(async () => {
         if (peerConnection && peerConnection.iceConnectionState !== 'connected' && peerConnection.iceConnectionState !== 'completed') {
           console.log('Call setup timeout. Current ICE state:', peerConnection.iceConnectionState);
-          alert('Call setup timed out. Please try again.');
+          await showCustomAlert('Call setup timed out. Please try again.');
           endCall();
         }
       }, 30000);  // 30 seconds timeout
 
     } catch (error) {
       console.error('Error accepting call:', error);
-      alert(`Error accepting call: ${error.message}`);
+      await showCustomAlert(`Error accepting call: ${error.message}`);
       endCall();
     }
   } else {
@@ -992,101 +784,6 @@ async function encryptAndUploadFile(file) {
   return JSON.stringify(data);
 }
 
-// async function sendFile() {
-//   const fileInput = document.getElementById('fileInput');
-  
-//   if (!fileInput.files[0]) {
-//     // If no file is selected, open the file selector
-//     fileInput.click();
-    
-//     // Wait for file selection
-//     await new Promise(resolve => {
-//       fileInput.onchange = () => resolve();
-//     });
-//   }
-  
-//   const file = fileInput.files[0];
-//   if (file && file.type.startsWith('image/')) {
-//     try {
-//       displayImage(file);
-//       const fileData = await encryptAndUploadFile(file);
-      
-//       gun.get(`chats`).get(getChatId(user.is.alias, currentChat)).set({
-//         sender: user.is.alias,
-//         type: 'file',
-//         content: fileData,
-//         timestamp: Date.now()
-//       });
-
-//       console.log('File sent successfully!');
-      
-//       // Clear the file input
-//       fileInput.value = '';
-//     } catch (error) {
-//       console.error('Error sending file:', error);
-//       fileInput.value = '';
-//       alert('Error sending file. Please try again.');
-//     }
-//   } else {
-//     fileInput.value = '';
-//     console.log('No file selected or file not supported image only');
-//     alert('No file selected or file not supported image only');
-//   }
-// }
-
-// async function receiveAndDecryptFile(fileData) {
-//   try {
-//     // Download encrypted file from custom IPFS backend
-//     const response = await fetch(`${IPFS_BACKEND_URL}/getFile`, {
-//       method: 'POST',
-//       headers: {
-//         'Content-Type': 'application/json',
-//       },
-//       body: JSON.stringify({ cid: fileData.cid })
-//     });
-
-//     if (!response.ok) {
-//       throw new Error(`HTTP error! status: ${response.status}`);
-//     }
-
-//     const encryptedFile = await response.arrayBuffer();
-
-//     // Import the symmetric key
-//     const symKey = await crypto.subtle.importKey(
-//       "raw",
-//       base64ToArrayBuffer(fileData.encryptedSymKey),
-//       { name: "AES-GCM", length: 256 },
-//       false,
-//       ["decrypt"]
-//     );
-
-//     // Decrypt file with symmetric key
-//     const decryptedFile = await crypto.subtle.decrypt(
-//       { name: "AES-GCM", iv: base64ToArrayBuffer(fileData.iv) },
-//       symKey,
-//       encryptedFile
-//     );
-
-//     // Create Blob with decrypted data
-//     const blob = new Blob([decryptedFile], { type: fileData.fileType });
-
-//     // Create download link
-//     const url = URL.createObjectURL(blob);
-//     const a = document.createElement('a');
-//     a.href = url;
-//     a.download = fileData.fileName || 'downloadedFile';
-//     document.body.appendChild(a);
-//     a.click();
-//     document.body.removeChild(a);
-//     URL.revokeObjectURL(url);
-
-//     alert('File downloaded and decrypted successfully!');
-//   } catch (error) {
-//     console.error('Error receiving file:', error);
-//     alert('Error receiving file. Please try again.');
-//   }
-// }
-
 
 async function sendFile() {
   const fileInput = document.getElementById('fileInput');
@@ -1127,12 +824,12 @@ async function sendFile() {
     } catch (error) {
       console.error('Error sending file:', error);
       fileInput.value = '';
-      alert('Error sending file. Please try again.');
+      await showCustomAlert('Error sending file. Please try again.');
     }
   } else {
     fileInput.value = '';
     console.log('No file selected or file not supported. Image files only.');
-    alert('No file selected or file not supported. Image files only.');
+    await showCustomAlertalert('No file selected or file not supported. Image files only.');
   }
 }
 
@@ -1204,7 +901,7 @@ async function receiveAndDecryptFile(fileData) {
     displayImage(blob);
   } catch (error) {
     console.error('Error receiving file:', error);
-    alert('Error receiving file. Please try again.');
+    await showCustomAlert('Error receiving file. Please try again.');
   }
 }
 
