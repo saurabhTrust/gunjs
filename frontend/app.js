@@ -109,7 +109,7 @@ function loadContacts() {
 function startChat(contactAlias) {
   currentChat = contactAlias;
   currentChatType = 'direct';
-  currentChatHeader.textContent = `Chat with ${contactAlias}`;
+  currentChatHeader.textContent = `${contactAlias}`;
   messagesDiv.innerHTML = '';
   messageControls.classList.remove('hidden');
   callControls.classList.remove('hidden');
@@ -1043,7 +1043,7 @@ document.getElementById('endCall').addEventListener('click', endCall);
   const url = new URL(urlString);
   const username = url.searchParams.get('username');
   let password = url.searchParams.get('password');
-  password += "Trus@"+password;
+  // password += "Trus@"+password;
   if (username && password) {
     try {
       await login(null, username.trim(), password.trim());
