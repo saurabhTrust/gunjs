@@ -266,7 +266,7 @@
  #callControls {
      display: flex;
      align-items: center;
-     justify-content: space-around;
+     /* justify-content: space-around; */
      margin-bottom: 10px;
  }
 
@@ -326,9 +326,13 @@
  }
 
  .recendButton {
-     margin-left: 40%;
+     margin-left: 45%;
      text-align: center;
  }
+ .recendButtonVideo {
+    margin-left: 1%;
+    text-align: center;
+}
 
  #videoContainer {
     position: relative;
