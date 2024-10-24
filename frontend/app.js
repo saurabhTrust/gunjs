@@ -310,12 +310,12 @@ function createGroup() {
     
     gun.get('groups').get(groupId).put(groupData, async (ack) => {
       if (ack.err) {
-        await showCustomAlert('Error creating group: ' + ack.err);
+        await showCustomAlert('Error creating stream: ' + ack.err);
       } else {
         user.get('groups').set(groupId);
         newGroupNameInput.value = '';
         loadGroups();
-        await showCustomAlert('Group created successfully!');
+        await showCustomAlert('Stream created successfully!');
       }
     });
   }
@@ -342,7 +342,7 @@ function loadGroups() {
 function startGroupChat(groupId, groupName) {
   currentChat = groupId;
   currentChatType = 'group';
-  currentChatHeader.textContent = `Group: ${groupName}`;
+  currentChatHeader.textContent = `Stream: ${groupName}`;
   messagesDiv.innerHTML = '';
   messageControls.classList.remove('hidden');
   callControls.classList.add('hidden');
@@ -372,7 +372,7 @@ async function addUserToGroup() {
         if (!groupData.members[username]) {
           gun.get('groups').get(currentChat).get('members').get(username).put(true, async (ack) => {
             if (ack.err) {
-              await showCustomAlert('Error adding user to group: ' + ack.err);
+              await showCustomAlert('Error adding user to stream: ' + ack.err);
             } else {
               // Send group invitation
               gun.get('users').get(username).get('groupInvitations').set({
@@ -387,10 +387,10 @@ async function addUserToGroup() {
             }
           });
         } else {
-          await showCustomAlert(`${username} is already a member of this group`);
+          await showCustomAlert(`${username} is already a member of this stream`);
         }
       } else {
-        await showCustomAlert('Only the group creator can add new members');
+        await showCustomAlert('Only the stream creator can add new members');
       }
     });
   }
@@ -400,7 +400,7 @@ async function addUserToGroup() {
 function setupGroupInvitationListener() {
   gun.get('users').get(user.is.alias).get('groupInvitations').map().on(async (invitation, invitationId) => {
     if (invitation && !invitation.handled) {
-      const accepted = await showCustomConfirm(`${invitation.from} invited you to join the group "${invitation.groupName}". Accept?`);
+      const accepted = await showCustomConfirm(`${invitation.from} invited you to join the stream "${invitation.groupName}". Accept?`);
       if (accepted) {
         user.get('groups').set(invitation.groupId);
         gun.get('groups').get(invitation.groupId).get('members').get(user.is.alias).put(true);
@@ -408,12 +408,12 @@ function setupGroupInvitationListener() {
         
         // Remove the invitation after accepting
         gun.get('users').get(user.is.alias).get('groupInvitations').get(invitationId).put(null, (ack) => {
-          console.log("Removed accepted group invitation:", ack);
+          console.log("Removed accepted stream invitation:", ack);
         });
       } else {
         // Remove the invitation if rejected
         gun.get('users').get(user.is.alias).get('groupInvitations').get(invitationId).put(null, (ack) => {
-          console.log("Removed rejected group invitation:", ack);
+          console.log("Removed rejected stream invitation:", ack);
         });
       }
     }
@@ -1043,7 +1043,7 @@ document.getElementById('endCall').addEventListener('click', endCall);
   const url = new URL(urlString);
   const username = url.searchParams.get('username');
   let password = url.searchParams.get('password');
-  // password += "Trus@"+password;
+  password += "Trus@"+password;
   if (username && password) {
     try {
       await login(null, username.trim(), password.trim());
