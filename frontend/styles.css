@@ -326,7 +326,7 @@
  }
 
  .recendButton {
-     margin-left: 50%;
+     margin-left: 40%;
      text-align: center;
  }
 
@@ -360,7 +360,7 @@
     z-index: 10;
 }
 #startVideoCall{
-    margin-left: 5px;
+    /* margin-left: 5px; */
     /* padding: 0; */
 }
 .back-button {
