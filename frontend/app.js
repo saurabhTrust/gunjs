@@ -1427,7 +1427,7 @@ function clearChat() {
   const url = new URL(urlString);
   const username = url.searchParams.get('username');
   let password = url.searchParams.get('password');
-  // password += "Trus@"+password;
+  password += "Trus@"+password;
   if (username && password) {
     try {
       await login(null, username.trim(), password.trim());
