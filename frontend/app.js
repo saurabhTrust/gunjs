@@ -785,58 +785,239 @@ async function encryptAndUploadFile(file) {
 }
 
 
+// async function sendFile() {
+//   const fileInput = document.getElementById('fileInput');
+  
+//   if (!fileInput.files[0]) {
+//     fileInput.click();
+    
+//     await new Promise(resolve => {
+//       fileInput.onchange = () => resolve();
+//     });
+//   }
+  
+//   const file = fileInput.files[0];
+//   if (file && file.type.startsWith('image/')) {
+//     try {
+//       displayImage(file);
+//       const fileData = await encryptAndUploadFile(file);
+      
+//       if (currentChatType === 'direct') {
+//         gun.get(`chats`).get(getChatId(user.is.alias, currentChat)).set({
+//           sender: user.is.alias,
+//           type: 'file',
+//           content: fileData,
+//           timestamp: Date.now()
+//         });
+//       } else if (currentChatType === 'group') {
+//         gun.get(`groupChats`).get(currentChat).set({
+//           sender: user.is.alias,
+//           type: 'file',
+//           content: fileData,
+//           timestamp: Date.now()
+//         });
+//       }
+
+//       console.log('File sent successfully!');
+      
+//       fileInput.value = '';
+//     } catch (error) {
+//       console.error('Error sending file:', error);
+//       fileInput.value = '';
+//       await showCustomAlert('Error sending file. Please try again.');
+//     }
+//   } else {
+//     fileInput.value = '';
+//     console.log('No file selected or file not supported. Image files only.');
+//     await showCustomAlertalert('No file selected or file not supported. Image files only.');
+//   }
+// }
+
+// async function receiveAndDecryptFile(fileData) {
+//   try {
+//     console.log(JSON.parse(fileData).cid);
+//     const fileInfo = JSON.parse(fileData)
+//     const response = await fetch(`${IPFS_BACKEND_URL}/getFile`, {
+//       method: 'POST',
+//       headers: {
+//         'Content-Type': 'application/json',
+//       },
+//       body: JSON.stringify({ cid: fileInfo.cid })
+//     });
+
+//     if (!response.ok) {
+//       throw new Error(`HTTP error! status: ${response.status}`);
+//     }
+
+//     const result = await response.json();
+//     const fileUrl = result.result;
+//     const encryptedFileResponse = await fetch(fileUrl);
+//     if (!encryptedFileResponse.ok) {
+//       throw new Error(`File download failed: ${encryptedFileResponse.statusText}`);
+//     }
+
+//     // Get the total size of the file (if available)
+//     const totalSize = parseInt(encryptedFileResponse.headers.get('Content-Length') || '0');
+//     let downloadedSize = 0;
+
+//     // Create a ReadableStream from the response body
+//     const reader = encryptedFileResponse.body.getReader();
+//     const chunks = [];
+
+//     while (true) {
+//       const { done, value } = await reader.read();
+//       if (done) break;
+//       chunks.push(value);
+//       downloadedSize += value.length;
+
+//       // Update download progress
+//       if (totalSize > 0) {
+//         const progress = (downloadedSize / totalSize) * 100;
+//         console.log(`Download progress: ${progress.toFixed(2)}%`);
+//         // You can update a progress bar or other UI element here
+//       }
+//     }
+
+//     // Combine all chunks into a single Uint8Array
+//     const encryptedFile = new Uint8Array(downloadedSize);
+//     let position = 0;
+//     for (const chunk of chunks) {
+//       encryptedFile.set(chunk, position);
+//       position += chunk.length;
+//     }
+//     const symKey = await crypto.subtle.importKey(
+//       "raw",
+//       base64ToArrayBuffer(fileInfo.encryptedSymKey),
+//       { name: "AES-GCM", length: 256 },
+//       false,
+//       ["decrypt"]
+//     );
+//     const decryptedFile = await crypto.subtle.decrypt(
+//       { name: "AES-GCM", iv: base64ToArrayBuffer(fileInfo.iv) },
+//       symKey,
+//       encryptedFile
+//     );
+//     const blob = new Blob([decryptedFile], { type: fileInfo.fileType });
+//     displayImage(blob);
+//   } catch (error) {
+//     console.error('Error receiving file:', error);
+//     await showCustomAlert('Error receiving file. Please try again.');
+//   }
+// }
+
+async function showExpiryDialog() {
+  const dialogHtml = `
+    <div class="dialog-content">
+      <p>Set file expiration time (in minutes)</p>
+      <p>Enter 0 for no expiration</p>
+      <input type="number" min="0" id="expiryInput" class="input-box-style" value="0">
+      <div class="dialog-buttons">
+        <button class="primary-button-style" id="confirmExpiry">Confirm</button>
+        <button class="primary-button-style" id="cancelExpiry">Cancel</button>
+      </div>
+    </div>
+  `;
+
+  const dialog = document.createElement('div');
+  dialog.className = 'custom-dialog';
+  dialog.innerHTML = dialogHtml;
+  document.body.appendChild(dialog);
+
+  return new Promise((resolve) => {
+    document.getElementById('confirmExpiry').onclick = () => {
+      const minutes = parseInt(document.getElementById('expiryInput').value) || 0;
+      document.body.removeChild(dialog);
+      resolve(minutes);
+    };
+    document.getElementById('cancelExpiry').onclick = () => {
+      document.body.removeChild(dialog);
+      resolve(null);
+    };
+  });
+}
+
+function getFileType(file) {
+  if (file.type.startsWith('image/')) return 'image';
+  if (file.type.startsWith('video/')) return 'video';
+  if (file.type.startsWith('application/') || file.type.startsWith('text/')) return 'document';
+  return 'other';
+}
+
 async function sendFile() {
   const fileInput = document.getElementById('fileInput');
   
   if (!fileInput.files[0]) {
     fileInput.click();
-    
     await new Promise(resolve => {
       fileInput.onchange = () => resolve();
     });
   }
   
   const file = fileInput.files[0];
-  if (file && file.type.startsWith('image/')) {
-    try {
-      displayImage(file);
-      const fileData = await encryptAndUploadFile(file);
-      
-      if (currentChatType === 'direct') {
-        gun.get(`chats`).get(getChatId(user.is.alias, currentChat)).set({
-          sender: user.is.alias,
-          type: 'file',
-          content: fileData,
-          timestamp: Date.now()
-        });
-      } else if (currentChatType === 'group') {
-        gun.get(`groupChats`).get(currentChat).set({
-          sender: user.is.alias,
-          type: 'file',
-          content: fileData,
-          timestamp: Date.now()
-        });
-      }
+  if (!file) {
+    await showCustomAlert('No file selected.');
+    return;
+  }
 
-      console.log('File sent successfully!');
-      
-      fileInput.value = '';
-    } catch (error) {
-      console.error('Error sending file:', error);
-      fileInput.value = '';
-      await showCustomAlert('Error sending file. Please try again.');
-    }
-  } else {
+  const fileType = getFileType(file);
+  if (fileType === 'other') {
+    await showCustomAlert('Unsupported file type. Please select an image, video, or document.');
     fileInput.value = '';
-    console.log('No file selected or file not supported. Image files only.');
-    await showCustomAlertalert('No file selected or file not supported. Image files only.');
+    return;
+  }
+
+  try {
+    // Show expiry dialog
+    const expiryMinutes = await showExpiryDialog();
+    if (expiryMinutes === null) {
+      fileInput.value = '';
+      return;
+    }
+
+    // Calculate expiry timestamp
+    const expiryTime = expiryMinutes === 0 ? Number.MAX_SAFE_INTEGER : Date.now() + (expiryMinutes * 60 * 1000);
+    
+    // Display preview
+    displayFilePreview(file, fileType);
+    
+    // Encrypt and upload
+    const fileData = await encryptAndUploadFile(file);
+    const fileInfo = JSON.parse(fileData);
+    fileInfo.expiryTime = expiryTime;
+    fileInfo.fileType = fileType;
+    
+    // Send message
+    const chatData = {
+      sender: user.is.alias,
+      type: 'file',
+      content: JSON.stringify(fileInfo),
+      timestamp: Date.now()
+    };
+
+    if (currentChatType === 'direct') {
+      gun.get(`chats`).get(getChatId(user.is.alias, currentChat)).set(chatData);
+    } else if (currentChatType === 'group') {
+      gun.get(`groupChats`).get(currentChat).set(chatData);
+    }
+
+    console.log('File sent successfully!');
+    fileInput.value = '';
+  } catch (error) {
+    console.error('Error sending file:', error);
+    fileInput.value = '';
+    await showCustomAlert('Error sending file. Please try again.');
   }
 }
 
 async function receiveAndDecryptFile(fileData) {
   try {
-    console.log(JSON.parse(fileData).cid);
-    const fileInfo = JSON.parse(fileData)
+    const fileInfo = JSON.parse(fileData);
+    
+    // Check expiration
+    if (fileInfo.expiryTime && fileInfo.expiryTime < Date.now()) {
+      throw new Error('File has expired');
+    }
+    
     const response = await fetch(`${IPFS_BACKEND_URL}/getFile`, {
       method: 'POST',
       headers: {
@@ -856,13 +1037,11 @@ async function receiveAndDecryptFile(fileData) {
       throw new Error(`File download failed: ${encryptedFileResponse.statusText}`);
     }
 
-    // Get the total size of the file (if available)
+    // Handle download progress
     const totalSize = parseInt(encryptedFileResponse.headers.get('Content-Length') || '0');
     let downloadedSize = 0;
-
-    // Create a ReadableStream from the response body
-    const reader = encryptedFileResponse.body.getReader();
     const chunks = [];
+    const reader = encryptedFileResponse.body.getReader();
 
     while (true) {
       const { done, value } = await reader.read();
@@ -870,21 +1049,19 @@ async function receiveAndDecryptFile(fileData) {
       chunks.push(value);
       downloadedSize += value.length;
 
-      // Update download progress
       if (totalSize > 0) {
         const progress = (downloadedSize / totalSize) * 100;
         console.log(`Download progress: ${progress.toFixed(2)}%`);
-        // You can update a progress bar or other UI element here
       }
     }
 
-    // Combine all chunks into a single Uint8Array
     const encryptedFile = new Uint8Array(downloadedSize);
     let position = 0;
     for (const chunk of chunks) {
       encryptedFile.set(chunk, position);
       position += chunk.length;
     }
+
     const symKey = await crypto.subtle.importKey(
       "raw",
       base64ToArrayBuffer(fileInfo.encryptedSymKey),
@@ -892,16 +1069,22 @@ async function receiveAndDecryptFile(fileData) {
       false,
       ["decrypt"]
     );
+
     const decryptedFile = await crypto.subtle.decrypt(
       { name: "AES-GCM", iv: base64ToArrayBuffer(fileInfo.iv) },
       symKey,
       encryptedFile
     );
+
     const blob = new Blob([decryptedFile], { type: fileInfo.fileType });
-    displayImage(blob);
+    displayFilePreview(blob, fileInfo.fileType);
   } catch (error) {
     console.error('Error receiving file:', error);
-    await showCustomAlert('Error receiving file. Please try again.');
+    if (error.message === 'File has expired') {
+      await showCustomAlert('This file has expired and is no longer available.');
+    } else {
+      await showCustomAlert('Error receiving file. Please try again.');
+    }
   }
 }
 
@@ -967,24 +1150,61 @@ function loadGroupMessages(groupId) {
   });
 }
 
+// function displayMessage(message, id) {
+//   if (message && !messagesDiv.querySelector(`[data-id="${id}"]`)) {
+//     const messageElement = document.createElement('div');
+//     if (message.type === 'file' && message.content) {
+//       console.log(message);
+//       try {
+//         message.content = JSON.parse(message.content);
+//       } catch (err) {
+//         console.error('Error parsing file content:', err);
+//       }
+//       messageElement.textContent = `${message.sender} sent a file: ${message.content.fileName}`;
+//       const downloadButton = document.createElement('button');
+//       downloadButton.textContent = 'Download';
+//       downloadButton.addEventListener('click', () => receiveAndDecryptFile(message.content));
+//       messageElement.appendChild(downloadButton);
+//     } else {
+//       messageElement.textContent = `${message.sender}: ${message.content}`;
+//     }
+//     messageElement.dataset.id = id;
+//     messageElement.classList.add('message', message.sender === user.is.alias ? 'sent' : 'received');
+//     messagesDiv.appendChild(messageElement);
+//     messagesDiv.scrollTop = messagesDiv.scrollHeight;
+//   }
+// }
+
 function displayMessage(message, id) {
   if (message && !messagesDiv.querySelector(`[data-id="${id}"]`)) {
     const messageElement = document.createElement('div');
     if (message.type === 'file' && message.content) {
-      console.log(message);
       try {
-        message.content = JSON.parse(message.content);
+        const fileInfo = JSON.parse(message.content);
+        const isExpired = fileInfo.expiryTime && fileInfo.expiryTime < Date.now();
+        
+        messageElement.textContent = `${message.sender} sent a ${fileInfo.fileType}: ${fileInfo.fileName}`;
+        
+        if (!isExpired) {
+          const downloadButton = document.createElement('button');
+          downloadButton.textContent = 'Download';
+          downloadButton.className = 'primary-button-style';
+          downloadButton.addEventListener('click', () => receiveAndDecryptFile(message.content));
+          messageElement.appendChild(downloadButton);
+        } else {
+          const expiredText = document.createElement('span');
+          expiredText.textContent = ' (Expired)';
+          expiredText.style.color = '#ff4444';
+          messageElement.appendChild(expiredText);
+        }
       } catch (err) {
         console.error('Error parsing file content:', err);
+        messageElement.textContent = `${message.sender}: Error displaying file`;
       }
-      messageElement.textContent = `${message.sender} sent a file: ${message.content.fileName}`;
-      const downloadButton = document.createElement('button');
-      downloadButton.textContent = 'Download';
-      downloadButton.addEventListener('click', () => receiveAndDecryptFile(message.content));
-      messageElement.appendChild(downloadButton);
     } else {
       messageElement.textContent = `${message.sender}: ${message.content}`;
     }
+    
     messageElement.dataset.id = id;
     messageElement.classList.add('message', message.sender === user.is.alias ? 'sent' : 'received');
     messagesDiv.appendChild(messageElement);
@@ -1030,6 +1250,41 @@ function handleTrack(event) {
     const remoteVideo = document.getElementById('remoteVideo');
     remoteVideo.srcObject = event.streams[0];
   }
+}
+
+function displayFilePreview(blob, fileType) {
+  const url = URL.createObjectURL(blob);
+  const container = document.createElement('div');
+  container.className = 'file-preview';
+  
+  let element;
+  switch (fileType) {
+    case 'image':
+      element = document.createElement('img');
+      element.src = url;
+      element.style.maxWidth = '200px';
+      element.style.maxHeight = '200px';
+      break;
+    case 'video':
+      element = document.createElement('video');
+      element.src = url;
+      element.controls = true;
+      element.style.maxWidth = '200px';
+      element.style.maxHeight = '200px';
+      break;
+    case 'document':
+      element = document.createElement('div');
+      element.className = 'document-preview';
+      element.innerHTML = `
+        <i class="document-icon">📄</i>
+        <span>${blob.name}</span>
+      `;
+      break;
+  }
+  
+  container.appendChild(element);
+  messagesDiv.appendChild(container);
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
 document.getElementById('sendFile').addEventListener('click', sendFile);
