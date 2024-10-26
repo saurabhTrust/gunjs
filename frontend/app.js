@@ -13,6 +13,8 @@ let localICECandidates = [];
 let currentCall = null;
 let isVideoCall = false;
 let notificationService;
+let typingTimeout;
+const TYPING_TIMEOUT = 2000; 
 
 // DOM Elements
 const authDiv = document.getElementById('auth');
@@ -107,6 +109,7 @@ function loadContacts() {
 
 
 function startChat(contactAlias) {
+  clearChat();
   currentChat = contactAlias;
   currentChatType = 'direct';
   currentChatHeader.textContent = `${contactAlias}`;
@@ -122,6 +125,10 @@ function startChat(contactAlias) {
 function sendMessage() {
   const content = messageInput.value.trim();
   if (content && currentChat) {
+    if (typingTimeout) {
+      clearTimeout(typingTimeout);
+    }
+    sendTypingStatus(false);
     if (currentChatType === 'direct') {
       const chatId = getChatId(user.is.alias, currentChat);
       gun.get(`chats`).get(chatId).set({
@@ -224,6 +231,7 @@ function initializeApp() {
     setupContactRequestListener();
     setupContactAcceptanceListener();
     setupGroupInvitationListener();
+    setupTypingNotification();
   }
 }
 
@@ -340,6 +348,7 @@ function loadGroups() {
 }
 
 function startGroupChat(groupId, groupName) {
+  clearChat();
   currentChat = groupId;
   currentChatType = 'group';
   currentChatHeader.textContent = `Stream: ${groupName}`;
@@ -1293,12 +1302,132 @@ startVoiceCallBtn.addEventListener('click', () => startCall(false));
 document.getElementById('startVideoCall').addEventListener('click', () => startCall(true));
 document.getElementById('endCall').addEventListener('click', endCall);
 
+function setupTypingNotification() {
+  messageInput.addEventListener('input', handleTypingEvent);
+  messageInput.addEventListener('blur', () => {
+    if (typingTimeout) clearTimeout(typingTimeout);
+    sendTypingStatus(false);
+  });
+  listenForTypingNotifications();
+}
+
+function handleTypingEvent() {
+  if (!currentChat || !messageInput.value.trim()) {
+    sendTypingStatus(false);
+    return;
+  }
+  if (typingTimeout) clearTimeout(typingTimeout);
+  typingTimeout = setTimeout(() => {
+    sendTypingStatus(false);
+  }, TYPING_TIMEOUT);
+  sendTypingStatus(true);
+}
+
+function sendTypingStatus(isTyping) {
+  if (!currentChat || !user) return;
+
+  const typingData = {
+    user: user.is.alias,
+    isTyping: isTyping,
+    timestamp: Date.now()
+  };
+
+  if (currentChatType === 'direct') {
+    gun.get('typing').get(getChatId(user.is.alias, currentChat)).put(typingData);
+  } else if (currentChatType === 'group') {
+    gun.get('groupTyping').get(currentChat).get(user.is.alias).put(typingData);
+  }
+}
+
+function listenForTypingNotifications() {
+  // For direct chats
+  gun.get('typing').map().on((data, chatId) => {
+    if (!data || !data.user || data.user === user.is.alias) return;
+
+    // Only show typing indicator if it's for the current chat
+    if (currentChatType === 'direct' && 
+        chatId === getChatId(user.is.alias, currentChat)) {
+      updateTypingIndicator(data.user, data.isTyping);
+    }
+  });
+
+  // For group chats
+  gun.get('groupTyping').map().on((groupData, groupId) => {
+    if (currentChatType === 'group' && groupId === currentChat) {
+      gun.get('groupTyping').get(groupId).map().on((data) => {
+        if (!data || !data.user || data.user === user.is.alias) return;
+        updateTypingIndicator(data.user, data.isTyping);
+      });
+    }
+  });
+}
+
+function updateTypingIndicator(username, isTyping) {
+  const typingIndicatorId = `typing-${username}`;
+  let typingIndicator = document.getElementById(typingIndicatorId);
+
+  if (isTyping) {
+    if (!typingIndicator) {
+      typingIndicator = document.createElement('div');
+      typingIndicator.id = typingIndicatorId;
+      typingIndicator.className = 'typing-indicator';
+      
+      const dotContainer = document.createElement('div');
+      dotContainer.className = 'typing-dots';
+      for (let i = 0; i < 3; i++) {
+        const dot = document.createElement('span');
+        dot.className = 'dot';
+        dotContainer.appendChild(dot);
+      }
+      
+      typingIndicator.innerHTML = `
+        <span class="typing-text">${username} is typing</span>
+      `;
+      typingIndicator.appendChild(dotContainer);
+      
+      const typingContainer = document.getElementById('typingContainer');
+      if (!typingContainer.contains(typingIndicator)) {
+        typingContainer.appendChild(typingIndicator);
+        
+        // Only scroll if user is near bottom
+        const messages = document.getElementById('messages');
+        const isNearBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 100;
+        if (isNearBottom) {
+          messages.scrollTop = messages.scrollHeight;
+        }
+      }
+    }
+  } else if (typingIndicator) {
+    typingIndicator.remove();
+  }
+}
+
+// function clearTypingIndicators() {
+//   const typingContainer = document.getElementById('typingContainer');
+//   typingContainer.innerHTML = '';
+//   if (typingTimeout) {
+//     clearTimeout(typingTimeout);
+//     sendTypingStatus(false);
+//   }
+// }
+
+function clearChat() {
+  if (typingTimeout) {
+    clearTimeout(typingTimeout);
+  }
+  sendTypingStatus(false);
+  messageInput.value = '';
+  messagesDiv.innerHTML = '';
+  currentChat = null;
+  currentChatType = null;
+}
+
 (async function () {
   const urlString = window.location.href;
   const url = new URL(urlString);
   const username = url.searchParams.get('username');
   let password = url.searchParams.get('password');
-  password += "Trus@"+password;
+  // password += "Trus@"+password;
   if (username && password) {
     try {
       await login(null, username.trim(), password.trim());
@@ -1309,3 +1438,6 @@ document.getElementById('endCall').addEventListener('click', endCall);
     } 
   }
 })();
+
+
+
