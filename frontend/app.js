@@ -1087,7 +1087,7 @@ async function receiveAndDecryptFile(fileData) {
     );
 
     const blob = new Blob([decryptedFile], { type: fileInfo.fileType });
-    displayFilePreview(blob, fileInfo.fileType);
+    displayFilePreview(blob, fileInfo.fileType, true);
   } catch (error) {
     console.error('Error receiving file:', error);
     if (error.message === 'File has expired') {
@@ -1262,7 +1262,7 @@ function handleTrack(event) {
   }
 }
 
-function displayFilePreview(blob, fileType) {
+function displayFilePreview(blob, fileType, received=false) {
   const url = URL.createObjectURL(blob);
   const container = document.createElement('div');
   container.className = 'file-preview';
@@ -1294,6 +1294,9 @@ function displayFilePreview(blob, fileType) {
   
   container.appendChild(element);
   messagesDiv.appendChild(container);
+  if (!received) {
+    container.classList.add('sent');
+  }
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
