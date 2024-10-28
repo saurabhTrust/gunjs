@@ -1,4 +1,4 @@
-const gun = Gun(['https://dcomm.dev.trustgrid.com/gun']);
+const gun = Gun(['http://localhost:3005/gun']);
 const IPFS_BACKEND_URL = 'https://ipfs-backend.uat.trustgrid.com';
 
 // User state
@@ -84,6 +84,7 @@ function login(e, loginUser, pass) {
         console.log("User authenticated:", user.is.alias);
         // Store/update the user's public data
         gun.get('users').get(username).put({ username: username });
+        registerPushNotifications();
         initializeApp();
         resolve(true);
       }
@@ -977,8 +978,8 @@ async function sendFile() {
 
   try {
     // Show expiry dialog
-    // const expiryMinutes = await showExpiryDialog();
-    const expiryMinutes = 0;
+    const expiryMinutes = await showExpiryDialog();
+    // const expiryMinutes = 0;
     if (expiryMinutes === null) {
       fileInput.value = '';
       return;
@@ -1426,12 +1427,89 @@ function clearChat() {
   currentChatType = null;
 }
 
+async function registerPushNotifications() {
+  try {
+    if (!('Notification' in window)) return;
+    console.log("Requesting permission");
+
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') return;
+
+    const registration = await navigator.serviceWorker.register('/notification-worker.js');
+    console.log('Service Worker registered');
+
+    const response = await fetch('/vapidPublicKey');
+    const { key } = await response.json();
+
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(key)
+    });
+
+    const deviceId = generateDeviceId();
+    console.log('Storing subscription for device:', deviceId);
+
+    // Store subscription
+    const deviceData = {
+      subscription: JSON.stringify(subscription),
+      deviceInfo: {
+        userAgent: navigator.userAgent,
+        lastSeen: Date.now(),
+        deviceId: deviceId
+      }
+    };
+
+    console.log('Storing device data:', deviceData);
+
+    // Store and verify
+    gun.get('users').get(user.is.alias).get('devices').get(deviceId).put(deviceData, (ack) => {
+      if (ack.err) {
+        console.error('Error storing subscription:', ack.err);
+      } else {
+        console.log('Subscription stored successfully');
+        // Verify storage
+        gun.get('users').get(user.is.alias).get('devices').get(deviceId).once((data) => {
+          console.log('Stored data verification:', data);
+        });
+      }
+    });
+
+  } catch (error) {
+    console.error('Push subscription failed:', error);
+  }
+}
+
+function generateDeviceId() {
+  let deviceId = localStorage.getItem('deviceId');
+  if (!deviceId) {
+    deviceId = `device_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    localStorage.setItem('deviceId', deviceId);
+  }
+  return deviceId;
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding)
+    .replace(/\-/g, '+')
+    .replace(/_/g, '/');
+  
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  
+  return outputArray;
+}
+
 (async function () {
   const urlString = window.location.href;
   const url = new URL(urlString);
   const username = url.searchParams.get('username');
   let password = url.searchParams.get('password');
-  password += "Trus@"+password;
+  //password += "Trus@"+password;
   if (username && password) {
     try {
       await login(null, username.trim(), password.trim());
