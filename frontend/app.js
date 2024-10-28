@@ -977,8 +977,8 @@ async function sendFile() {
 
   try {
     // Show expiry dialog
-    const expiryMinutes = await showExpiryDialog();
-    // const expiryMinutes = 0;
+    //const expiryMinutes = await showExpiryDialog();
+    const expiryMinutes = 0;
     if (expiryMinutes === null) {
       fileInput.value = '';
       return;
