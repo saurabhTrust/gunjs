@@ -977,8 +977,8 @@ async function sendFile() {
 
   try {
     // Show expiry dialog
-    // const expiryMinutes = await showExpiryDialog();
-    const expiryMinutes = 0;
+    const expiryMinutes = await showExpiryDialog();
+    // const expiryMinutes = 0;
     if (expiryMinutes === null) {
       fileInput.value = '';
       return;
@@ -1244,8 +1244,8 @@ function displayImage(blob) {
   const url = URL.createObjectURL(blob);
   const img = document.createElement('img');
   img.src = url;
-  img.style.maxWidth = '200px'; // Adjust as needed
-  img.style.maxHeight = '200px'; // Adjust as needed
+  img.style.maxWidth = '200px';
+  img.style.maxHeight = '200px';
   
   const messagesDiv = document.getElementById('messages');
   messagesDiv.appendChild(img);
