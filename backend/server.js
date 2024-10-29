@@ -1,7 +1,10 @@
+const fs = require('fs');
+const path = require('path');
+
 const express = require('express');
 const Gun = require('gun');
-const path = require('path');
 const webpush = require('web-push');
+
 const processedMessages = new Set();
 
 const app = express();
@@ -11,7 +14,28 @@ const PORT = process.env.PORT || 3005;
 app.use(express.static(path.join(__dirname, '../frontend')));
 
 
-const vapidKeys = webpush.generateVAPIDKeys();
+const vapidKeys = getVapidKeys();
+
+function getVapidKeys() {
+  const vapidPath = path.join(__dirname, 'vapid-keys.json');
+  
+  try {
+      if (fs.existsSync(vapidPath)) {
+          const keys = JSON.parse(fs.readFileSync(vapidPath));
+          console.log('Loaded existing VAPID keys');
+          return keys;
+      }
+      const keys = webpush.generateVAPIDKeys();
+      
+      fs.writeFileSync(vapidPath, JSON.stringify(keys));
+      console.log('Generated and saved new VAPID keys');
+      
+      return keys;
+  } catch (error) {
+      console.error('Error handling VAPID keys:', error);
+      process.exit(1);
+  }
+}
 
 webpush.setVapidDetails(
   'mailto:saurabhk@trustgrid.com',

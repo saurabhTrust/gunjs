@@ -16,6 +16,7 @@ self.addEventListener('push', (event) => {
       body: data.body,
       icon: '/app-icon.png',
       badge: '/badge-icon.png',
+      sound: '/notification.wav',
       data: data.data,
       tag: data.type === 'chat' ? `chat-${data.data.from}` : data.type,
       renotify: true,
