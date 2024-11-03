@@ -6,6 +6,7 @@ const Gun = require('gun');
 const webpush = require('web-push');
 
 const processedMessages = new Set();
+const processedCalls = new Set();
 
 const app = express();
 const PORT = process.env.PORT || 3005;
@@ -43,7 +44,6 @@ webpush.setVapidDetails(
   vapidKeys.privateKey
 );
 
-// Optionally, you can add a route to check if the server is running
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK' });
 });
@@ -57,35 +57,6 @@ const server = app.listen(PORT, () => {
 app.get('/vapidPublicKey', (req, res) => {
   res.json({ key: vapidKeys.publicKey });
 });
-
-// Function to send push notification
-async function sendPushNotification(userAlias, notificationData) {
-  console.log('Finding devices for user:', userAlias);
-  
-  gun.get('users').get(userAlias).get('devices').map().once(async (device) => {
-    console.log('Found device:', device);
-    
-    if (!device?.subscription) {
-      console.log('No subscription for device');
-      return;
-    }
-
-    try {
-      const subscription = JSON.parse(device.subscription);
-      console.log('Sending push to subscription:', subscription);
-      
-      await webpush.sendNotification(subscription, JSON.stringify(notificationData));
-      console.log('Push notification sent successfully');
-    } catch (error) {
-      console.error('Push failed:', error);
-      if (error.statusCode === 410) {
-        console.log('Removing invalid subscription');
-        gun.get('users').get(userAlias).get('devices').get(device.deviceInfo.deviceId).put(null);
-      }
-    }
-  });
-}
-
 
 // Initialize Gun
 const gun = Gun({
@@ -152,6 +123,111 @@ gun.get('chats').map().once((chatNode, chatId) => {
     });
   });
 });
+
+gun.get('calls').map().once((callNode, callId) => {
+  console.log('Call node detected:', { callId, callNode });
+  
+  gun.get('calls').get(callId).once(async (callData) => {
+    try {
+      console.log('Initial call data:', { callId, callData });
+      
+      if (!callData) {
+        console.log('No call data found for:', callId);
+        return;
+      }
+
+      // Skip if already processed
+      if (processedCalls.has(callId)) {
+        console.log('Call already processed:', callId);
+        return;
+      }
+      
+      processedCalls.add(callId);
+
+      // Validate required fields
+      if (!callData.type || !callData.from || !callData.to) {
+        console.log('Invalid call data structure:', callData);
+        return;
+      }
+
+      // Only handle initial call offers
+      if (callData.type === 'offer') {
+        console.log('Processing call offer:', callData);
+        
+        const notificationData = {
+          type: 'call',
+          title: `Incoming ${callData.isVideo ? 'Video' : 'Voice'} Call`,
+          body: `${callData.from} is calling...`,
+          data: {
+            type: 'call',
+            from: callData.from,
+            callId: callId,
+            isVideo: callData.isVideo,
+            offerSdp: callData.offerSdp,
+            offerType: callData.offerType,
+            timestamp: Date.now()
+          }
+        };
+
+        await sendPushNotification(callData.to, notificationData);
+        console.log('Call notification sent successfully');
+        
+        // Mark the call as notified
+        gun.get('calls').get(callId).get('notified').put(true);
+      }
+    } catch (error) {
+      console.error('Error processing call:', error);
+    }
+  });
+});
+
+// gun.get('calls').map().on((callData, callId) => {
+//   console.log('Call state change:', { callId, callData });
+// });
+
+
+async function sendPushNotification(userAlias, notificationData, retries = 3) {
+  console.log('Sending notification to:', userAlias, 'Data:', notificationData);
+  
+  let lastError;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      await sendPushNotificationToUser(userAlias, notificationData);
+      console.log('Notification sent successfully on attempt:', attempt);
+      return;
+    } catch (error) {
+      lastError = error;
+      console.error(`Attempt ${attempt} failed:`, error);
+      if (attempt < retries) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
+    }
+  }
+  throw lastError;
+}
+
+async function sendPushNotificationToUser(userAlias, notificationData) {
+  return new Promise((resolve, reject) => {
+    gun.get('users').get(userAlias).get('devices').map().once(async (device) => {
+      if (!device?.subscription) {
+        console.log('No subscription for device:', device);
+        return;
+      }
+
+      try {
+        const subscription = JSON.parse(device.subscription);
+        await webpush.sendNotification(subscription, JSON.stringify(notificationData));
+        resolve();
+      } catch (error) {
+        if (error.statusCode === 410) {
+          console.log('Removing invalid subscription for device');
+          gun.get('users').get(userAlias).get('devices').get(device.deviceInfo.deviceId).put(null);
+        }
+        reject(error);
+      }
+    });
+  });
+}
 
 setInterval(() => {
   const oneHourAgo = Date.now() - (60 * 60 * 1000);
