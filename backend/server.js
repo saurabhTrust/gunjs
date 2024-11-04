@@ -181,10 +181,137 @@ gun.get('calls').map().once((callNode, callId) => {
   });
 });
 
-// gun.get('calls').map().on((callData, callId) => {
-//   console.log('Call state change:', { callId, callData });
-// });
+gun.get('users').map().once((userData, userAlias) => {
+  gun.get('users').get(userAlias).get('contactRequests').map().once(async (request, requestId) => {
+    if (!request || request.notified || !request.from) return;
 
+    console.log('Processing contact request notification:', { userAlias, request });
+
+    // Get all devices for the recipient
+    gun.get('users').get(userAlias).get('devices').map().once((deviceData, deviceId) => {
+      if (deviceId === '_') return;
+      
+      gun.get('users').get(userAlias).get('devices').get(deviceId).once((device) => {
+        if (device?.subscription) {
+          try {
+            const subscription = JSON.parse(device.subscription);
+            webpush.sendNotification(subscription, JSON.stringify({
+              type: 'contactRequest',
+              title: 'New Contact Request',
+              body: `${request.from} wants to connect with you`,
+              data: {
+                type: 'contactRequest',
+                from: request.from,
+                requestId: requestId
+              }
+            })).then(() => {
+              gun.get('users').get(userAlias).get('contactRequests').get(requestId).get('notified').put(true);
+            }).catch(error => {
+              console.error('Push failed:', error);
+              if (error.statusCode === 410) {
+                gun.get('users').get(userAlias).get('devices').get(deviceId).put(null);
+              }
+            });
+          } catch (error) {
+            console.error('Error processing subscription:', error);
+          }
+        }
+      });
+    });
+  });
+
+  gun.get('users').get(userAlias).get('groupInvitations').map().once(async (invitation, invitationId) => {
+    if (!invitation || invitation.notified || !invitation.from) return;
+
+    console.log('Processing group invitation notification:', { userAlias, invitation });
+
+    gun.get('users').get(userAlias).get('devices').map().once((deviceData, deviceId) => {
+      if (deviceId === '_') return;
+      
+      gun.get('users').get(userAlias).get('devices').get(deviceId).once((device) => {
+        if (device?.subscription) {
+          try {
+            const subscription = JSON.parse(device.subscription);
+            webpush.sendNotification(subscription, JSON.stringify({
+              type: 'groupInvitation',
+              title: 'New Stream Invitation',
+              body: `${invitation.from} invited you to join "${invitation.groupName}"`,
+              data: {
+                type: 'groupInvitation',
+                from: invitation.from,
+                groupId: invitation.groupId,
+                groupName: invitation.groupName,
+                invitationId: invitationId
+              }
+            })).then(() => {
+              gun.get('users').get(userAlias).get('groupInvitations').get(invitationId).get('notified').put(true);
+            }).catch(error => {
+              console.error('Push failed:', error);
+              if (error.statusCode === 410) {
+                gun.get('users').get(userAlias).get('devices').get(deviceId).put(null);
+              }
+            });
+          } catch (error) {
+            console.error('Error processing subscription:', error);
+          }
+        }
+      });
+    });
+  });
+});
+
+gun.get('groupChats').map().once((chatNode, groupId) => {
+  gun.get('groupChats').get(groupId).map().once(async (message, messageId) => {
+    if (!messageId || !message || !message.sender || !message.timestamp || message.notified) return;
+    if (Date.now() - message.timestamp > 5000) return;
+
+    console.log('Processing group message:', { groupId, messageId, message });
+
+    // Get group members
+    gun.get('groups').get(groupId).once((groupData) => {
+      if (!groupData || !groupData.members) return;
+
+      // Send notification to all group members except sender
+      Object.keys(groupData.members).forEach((memberAlias) => {
+        if (memberAlias === message.sender || memberAlias === '_') return;
+
+        // Get member's devices
+        gun.get('users').get(memberAlias).get('devices').map().once((deviceData, deviceId) => {
+          if (deviceId === '_') return;
+
+          gun.get('users').get(memberAlias).get('devices').get(deviceId).once((device) => {
+            if (device?.subscription) {
+              try {
+                const subscription = JSON.parse(device.subscription);
+                webpush.sendNotification(subscription, JSON.stringify({
+                  type: 'group',
+                  title: groupData.name,
+                  body: message.type === 'file' ? `${message.sender} sent a file` : `${message.sender}: ${message.content}`,
+                  data: {
+                    type: 'group',
+                    groupId: groupId,
+                    groupName: groupData.name,
+                    from: message.sender,
+                    messageId: messageId
+                  }
+                })).then(() => {
+                  gun.get('groupChats').get(groupId).get(messageId).get('notified').put(true);
+                }).catch(error => {
+                  console.error('Push failed:', error);
+                  if (error.statusCode === 410) {
+                    gun.get('users').get(memberAlias).get('devices').get(deviceId).put(null);
+                  }
+                });
+              } catch (error) {
+                console.error('Error processing subscription:', error);
+              }
+            }
+          });
+        });
+      });
+    });
+  });
+});
 
 async function sendPushNotification(userAlias, notificationData, retries = 3) {
   console.log('Sending notification to:', userAlias, 'Data:', notificationData);

@@ -9,7 +9,7 @@ self.addEventListener('activate', (event) => {
 // Notification schemas for different types
 const notificationSchemas = {
   chat: {
-    title: (data) => `Message from ${data.sender}`,
+    title: (data) => `Message from ${data.title}`,
     body: (data) => data.type === 'file' ? 'Sent a file' : data.content,
     data: (data) => ({ type: 'chat', from: data.sender })
   },
@@ -28,6 +28,27 @@ const notificationSchemas = {
       isVideo: data.isVideo,
       offerSdp: data.offerSdp,
       offerType: data.offerType
+    })
+  },
+  contactRequest: {
+    title: (data) => 'New Contact Request',
+    body: (data) => `${data.from} wants to connect with you`,
+    data: (data) => ({
+      type: 'contactRequest',
+      from: data.from,
+      requestId: data.requestId
+    })
+  },
+  
+  groupInvitation: {
+    title: (data) => 'New Stream Invitation',
+    body: (data) => `${data.from} invited you to join "${data.groupName}"`,
+    data: (data) => ({
+      type: 'groupInvitation',
+      from: data.from,
+      groupId: data.groupId,
+      groupName: data.groupName,
+      invitationId: data.invitationId
     })
   }
 };
@@ -68,6 +89,38 @@ const notificationOptions = {
     requireInteraction: true,
     renotify: true,
     vibrate: [200, 100, 200, 100, 200],
+    actions: [
+      {
+        action: 'accept',
+        title: 'Accept'
+      },
+      {
+        action: 'decline',
+        title: 'Decline'
+      }
+    ]
+  },
+  contactRequest: {
+    icon: '/app-icon.png',
+    badge: '/badge-icon.png',
+    requireInteraction: true,
+    vibrate: [100, 50, 100],
+    actions: [
+      {
+        action: 'accept',
+        title: 'Accept'
+      },
+      {
+        action: 'decline',
+        title: 'Decline'
+      }
+    ]
+  },
+  groupInvitation: {
+    icon: '/app-icon.png',
+    badge: '/badge-icon.png',
+    requireInteraction: true,
+    vibrate: [100, 50, 100],
     actions: [
       {
         action: 'accept',
@@ -153,6 +206,12 @@ self.addEventListener('notificationclick', (event) => {
     case 'call':
       handlePromise = handleCallNotificationClick(data, action);
       break;
+    case 'contactRequest':
+      handlePromise = handleContactRequestNotificationClick(data, action);
+      break;
+    case 'groupInvitation':
+      handlePromise = handleGroupInvitationNotificationClick(data, action);
+      break;
     default:
       handlePromise = Promise.resolve();
   }
@@ -171,9 +230,30 @@ async function handleGroupNotificationClick(data, action) {
   return openOrFocusWindow(`/group/${data.groupId}`);
 }
 
+async function handleContactRequestNotificationClick(data, action) {
+  const urlWithParams = new URL(self.location.origin);
+  urlWithParams.searchParams.set('type', 'contactRequest');
+  urlWithParams.searchParams.set('action', action);
+  urlWithParams.searchParams.set('from', data.from);
+  urlWithParams.searchParams.set('requestId', data.requestId);
+  
+  return openOrFocusWindow(urlWithParams.toString());
+}
+
+async function handleGroupInvitationNotificationClick(data, action) {
+  const urlWithParams = new URL(self.location.origin);
+  urlWithParams.searchParams.set('type', 'groupInvitation');
+  urlWithParams.searchParams.set('action', action);
+  urlWithParams.searchParams.set('groupId', data.groupId);
+  urlWithParams.searchParams.set('from', data.from);
+  urlWithParams.searchParams.set('invitationId', data.invitationId);
+  
+  return openOrFocusWindow(urlWithParams.toString());
+}
+
 async function handleCallNotificationClick(data, action) {
   const url = `/chat/${data.from}`;
-  const urlWithParams = new URL(url, self.location.origin);
+  const urlWithParams = new URL(self.location.origin);
   
   if (action === 'accept') {
     urlWithParams.searchParams.set('action', 'acceptCall');
@@ -197,7 +277,7 @@ async function openOrFocusWindow(urlToOpen) {
 
   for (const client of clientList) {
     const url = new URL(client.url);
-    const targetUrl = new URL('', self.location.origin);
+    const targetUrl = new URL(self.location.origin);
 
     if (url.pathname === targetUrl.pathname) {
       await client.focus();
