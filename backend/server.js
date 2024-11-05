@@ -3,7 +3,7 @@ const path = require('path');
 
 const express = require('express');
 const Gun = require('gun');
-// const webpush = require('web-push');
+const webpush = require('web-push');
 
 const processedMessages = new Set();
 const processedCalls = new Set();
