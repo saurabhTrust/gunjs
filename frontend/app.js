@@ -1299,7 +1299,7 @@ async function handleIncomingCall(data) {
 
   try {
     const callType = data.isVideo ? 'video' : 'voice';
-    const confirmed = await showCustomConfirm(`Incoming ${callType} call from ${data.from}. Accept?`);
+    const confirmed = confirm(`Incoming ${callType} call from ${data.from}. Accept?`);
 
     if (confirmed) {
       // Update call status immediately
