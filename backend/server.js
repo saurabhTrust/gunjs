@@ -124,62 +124,62 @@ gun.get('chats').map().once((chatNode, chatId) => {
   });
 });
 
-gun.get('calls').map().once((callNode, callId) => {
-  console.log('Call node detected:', { callId, callNode });
+// gun.get('calls').map().once((callNode, callId) => {
+//   console.log('Call node detected:', { callId, callNode });
   
-  gun.get('calls').get(callId).once(async (callData) => {
-    try {
-      console.log('Initial call data:', { callId, callData });
+//   gun.get('calls').get(callId).once(async (callData) => {
+//     try {
+//       console.log('Initial call data:', { callId, callData });
       
-      if (!callData) {
-        console.log('No call data found for:', callId);
-        return;
-      }
+//       if (!callData) {
+//         console.log('No call data found for:', callId);
+//         return;
+//       }
 
-      // Skip if already processed
-      if (processedCalls.has(callId)) {
-        console.log('Call already processed:', callId);
-        return;
-      }
+//       // Skip if already processed
+//       if (processedCalls.has(callId)) {
+//         console.log('Call already processed:', callId);
+//         return;
+//       }
       
-      processedCalls.add(callId);
+//       processedCalls.add(callId);
 
-      // Validate required fields
-      if (!callData.type || !callData.from || !callData.to) {
-        console.log('Invalid call data structure:', callData);
-        return;
-      }
+//       // Validate required fields
+//       if (!callData.type || !callData.from || !callData.to) {
+//         console.log('Invalid call data structure:', callData);
+//         return;
+//       }
 
-      // Only handle initial call offers
-      if (callData.type === 'offer') {
-        console.log('Processing call offer:', callData);
+//       // Only handle initial call offers
+//       if (callData.type === 'offer') {
+//         console.log('Processing call offer:', callData);
         
-        const notificationData = {
-          type: 'call',
-          title: `Incoming ${callData.isVideo ? 'Video' : 'Voice'} Call`,
-          body: `${callData.from} is calling...`,
-          data: {
-            type: 'call',
-            from: callData.from,
-            callId: callId,
-            isVideo: callData.isVideo,
-            offerSdp: callData.offerSdp,
-            offerType: callData.offerType,
-            timestamp: Date.now()
-          }
-        };
+//         const notificationData = {
+//           type: 'call',
+//           title: `Incoming ${callData.isVideo ? 'Video' : 'Voice'} Call`,
+//           body: `${callData.from} is calling...`,
+//           data: {
+//             type: 'call',
+//             from: callData.from,
+//             callId: callId,
+//             isVideo: callData.isVideo,
+//             offerSdp: callData.offerSdp,
+//             offerType: callData.offerType,
+//             timestamp: Date.now()
+//           }
+//         };
 
-        await sendPushNotification(callData.to, notificationData);
-        console.log('Call notification sent successfully');
+//         await sendPushNotification(callData.to, notificationData);
+//         console.log('Call notification sent successfully');
         
-        // Mark the call as notified
-        gun.get('calls').get(callId).get('notified').put(true);
-      }
-    } catch (error) {
-      console.error('Error processing call:', error);
-    }
-  });
-});
+//         // Mark the call as notified
+//         gun.get('calls').get(callId).get('notified').put(true);
+//       }
+//     } catch (error) {
+//       console.error('Error processing call:', error);
+//     }
+//   });
+// });
 
 gun.get('users').map().once((userData, userAlias) => {
   gun.get('users').get(userAlias).get('contactRequests').map().once(async (request, requestId) => {

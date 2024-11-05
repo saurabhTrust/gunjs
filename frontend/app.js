@@ -1,4 +1,4 @@
-const gun = Gun(['https://dcomm.dev.trustgrid.com/gun']);
+const gun = Gun(['http://localhost:3005/gun']);
 const IPFS_BACKEND_URL = 'https://ipfs-backend.uat.trustgrid.com';
 
 // User state
@@ -1701,7 +1701,7 @@ async function handleIncomingCall(data) {
   const url = new URL(urlString);
   const username = url.searchParams.get('username');
   let password = url.searchParams.get('password');
-  password += "Trus@"+password;
+  //password += "Trus@"+password;
   if (username && password) {
     try {
       await login(null, username.trim(), password.trim());
