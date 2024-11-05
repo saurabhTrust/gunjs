@@ -15,6 +15,7 @@ let isVideoCall = false;
 let notificationService;
 let typingTimeout;
 const TYPING_TIMEOUT = 2000; 
+const processedCandidates = new Set();
 
 // DOM Elements
 const authDiv = document.getElementById('auth');
@@ -201,19 +202,12 @@ function getChatId(user1, user2) {
   return [user1, user2].sort().join('_');
 }
 
-// Event Listeners
-// registerBtn.addEventListener('click', register);
-// loginBtn.addEventListener('click', login);
 sendMessageBtn.addEventListener('click', sendMessage);
 addContactBtn.addEventListener('click', addContact);
 
 createGroupBtn.addEventListener('click', createGroup);
 addToGroupBtn.addEventListener('click', addUserToGroup);
 
-// startVoiceCallBtn.addEventListener('click', startVoiceCall);
-// endVoiceCallBtn.addEventListener('click', endVoiceCall);
-
-// Initialize when the page loads
 window.addEventListener('load', () => {
   initializeWebRTC()
   if (user && user.is) {
@@ -361,18 +355,6 @@ function startGroupChat(groupId, groupName) {
   loadGroupMessages(groupId);
 }
 
-// function loadGroupMessages(groupId) {
-//   gun.get(`groupChats`).get(groupId).map().on((message, id) => {
-//     if (message && !messagesDiv.querySelector(`[data-id="${id}"]`)) {
-//       const messageElement = document.createElement('div');
-//       messageElement.textContent = `${message.sender}: ${message.content}`;
-//       messageElement.dataset.id = id;
-//       messageElement.classList.add('message', message.sender === user.is.alias ? 'sent' : 'received');
-//       messagesDiv.appendChild(messageElement);
-//       messagesDiv.scrollTop = messagesDiv.scrollHeight;
-//     }
-//   });
-// }
 
 async function addUserToGroup() {
   const username = addToGroupInput.value.trim();
@@ -429,78 +411,6 @@ function setupGroupInvitationListener() {
     }
   });
 }
-
-
-// async function startCall(withVideo = false) {
-//   if (isCallInProgress || currentChatType !== 'direct') {
-//     await showCustomAlert('A call is already in progress or you\'re not in a direct chat.');
-//     return;
-//   }
-
-//   try {
-//     isCallInProgress = true;
-//     isVideoCall = withVideo;
-//     const mediaConstraints = { audio: true, video: withVideo };
-//     localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-//     console.log('Local stream obtained:', localStream.getTracks());
-    
-//     if (withVideo) {
-//       document.getElementById('localVideo').srcObject = localStream;
-//       document.getElementById('videoContainer').classList.remove('hidden');
-//     }
-    
-//     peerConnection = await webrtcHandler.createPeerConnection();
-//     const offer = await webrtcHandler.startCall(localStream);
-    
-//     const callId = Date.now().toString();
-//     currentCall = {
-//       id: callId,
-//       to: currentChat,
-//       from: user.is.alias,
-//       startTime: Date.now(),
-//       isVideo: withVideo
-//     };
-
-//     const offerData = {
-//       type: 'offer',
-//       callId: callId,
-//       from: user.is.alias,
-//       to: currentChat,
-//       offerType: offer.type,
-//       offerSdp: offer.sdp,
-//       startTime: currentCall.startTime,
-//       isVideo: withVideo,
-//       status: 'pending'
-//     };
-
-//     gun.get(`calls`).get(callId).put(offerData);
-//     console.log('Offer sent:', offerData);
-
-//     setupICECandidateListener(callId);
-    
-//     startVoiceCallBtn.classList.add('hidden');
-//     startVideoCallBtn.classList.add('hidden');
-//     endCallBtn.classList.remove('hidden');
-
-//     // Set a timeout to check if the call was established
-//     setTimeout(async () => {
-//       if (peerConnection && peerConnection.iceConnectionState !== 'connected' && peerConnection.iceConnectionState !== 'completed') {
-//         console.log('Call setup timeout. Current ICE state:', peerConnection.iceConnectionState);
-//         await showCustomAlert('Call setup timed out. Please try again.');
-//         endCall();
-//       }
-//     }, 30000);  // 30 seconds timeout
-
-//   } catch (error) {
-//     console.error('Error starting call:', error);
-//     await showCustomAlert('Error starting call: ' + error.message);
-//     isCallInProgress = false;
-//     if (localStream) {
-//       localStream.getTracks().forEach(track => track.stop());
-//     }
-//     currentCall = null;
-//   }
-// }
 
 
 function endCall() {
@@ -619,91 +529,6 @@ function checkAudioLevels(stream, label) {
 }
 
 
-// async function handleIncomingCall(data) {
-//   if (isCallInProgress) {
-//     console.log('Already in a call, ignoring incoming call');
-//     return;
-//   }
-
-//   const callType = data.isVideo ? 'video' : 'voice';
-//   const confirmed = confirm(`Incoming ${callType} call from ${data.from}. Accept?`);
-//   if (confirmed) {
-//     try {
-//       isCallInProgress = true;
-//       isVideoCall = data.isVideo;
-//       const mediaConstraints = { audio: true, video: data.isVideo };
-//       localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-//       console.log('Local stream obtained:', localStream.getTracks());
-      
-//       if (data.isVideo) {
-//         document.getElementById('localVideo').srcObject = localStream;
-//         document.getElementById('videoContainer').classList.remove('hidden');
-//       }
-      
-//       peerConnection = await webrtcHandler.createPeerConnection();
-      
-//       const offer = {
-//         type: data.offerType,
-//         sdp: data.offerSdp
-//       };
-
-//       const answer = await webrtcHandler.handleIncomingCall(offer, localStream);
-      
-//       currentCall = {
-//         id: data.callId,
-//         to: data.from,
-//         from: user.is.alias,
-//         startTime: Date.now(),
-//         isVideo: data.isVideo
-//       };
-
-//       const answerData = {
-//         type: 'answer',
-//         callId: data.callId,
-//         from: user.is.alias,
-//         to: data.from,
-//         answerType: answer.type,
-//         answerSdp: answer.sdp,
-//         time: currentCall.startTime,
-//         isVideo: data.isVideo
-//       };
-
-//       gun.get(`calls`).get(data.callId).put(answerData);
-//       console.log('Answer sent:', answerData);
-
-//       setupICECandidateListener(data.callId);
-      
-//       startVoiceCallBtn.classList.add('hidden');
-//       startVideoCallBtn.classList.add('hidden');
-//       endCallBtn.classList.remove('hidden');
-
-//       // Send buffered ICE candidates
-//       sendBufferedICECandidates(data.callId);
-
-//       // Set a timeout to check if the call was established
-//       setTimeout(async () => {
-//         if (peerConnection && peerConnection.iceConnectionState !== 'connected' && peerConnection.iceConnectionState !== 'completed') {
-//           console.log('Call setup timeout. Current ICE state:', peerConnection.iceConnectionState);
-//           await showCustomAlert('Call setup timed out. Please try again.');
-//           endCall();
-//         }
-//       }, 30000);  // 30 seconds timeout
-
-//     } catch (error) {
-//       console.error('Error accepting call:', error);
-//       await showCustomAlert(`Error accepting call: ${error.message}`);
-//       endCall();
-//     }
-//   } else {
-//     gun.get(`calls`).get(data.callId).put({ 
-//       type: 'reject',
-//       from: user.is.alias,
-//       to: data.from,
-//       time: Date.now()
-//     });
-//   }
-// }
-
 function handleICECandidate(event) {
   if (event.candidate) {
     const iceCandidate = {
@@ -737,17 +562,18 @@ function sendBufferedICECandidates(callId) {
 }
 
 function setupICECandidateListener(callId) {
-  gun.get(`calls`).get(callId).get('iceCandidates').map().on((stringifiedCandidate, key) => {
-    if (stringifiedCandidate) {
-      try {
-        const iceCandidate = JSON.parse(stringifiedCandidate);
-        if (iceCandidate && iceCandidate.from !== user.is.alias) {
-          console.log('Received ICE candidate:', iceCandidate);
-          webrtcHandler.addIceCandidate(iceCandidate.candidate);
-        }
-      } catch (error) {
-        console.error('Error parsing ICE candidate:', error);
+  gun.get('calls').get(callId).get('iceCandidates').map().on((stringifiedCandidate, key) => {
+    if (!stringifiedCandidate || processedCandidates.has(key)) return;
+    processedCandidates.add(key);
+
+    try {
+      const iceCandidate = JSON.parse(stringifiedCandidate);
+      if (iceCandidate && iceCandidate.from !== user.is.alias) {
+        webrtcHandler.addIceCandidate(iceCandidate.candidate)
+          .catch(error => console.error('Error adding ICE candidate:', error));
       }
+    } catch (error) {
+      console.error('Error parsing ICE candidate:', error);
     }
   });
 }
@@ -794,127 +620,6 @@ async function encryptAndUploadFile(file) {
   };
   return JSON.stringify(data);
 }
-
-
-// async function sendFile() {
-//   const fileInput = document.getElementById('fileInput');
-  
-//   if (!fileInput.files[0]) {
-//     fileInput.click();
-    
-//     await new Promise(resolve => {
-//       fileInput.onchange = () => resolve();
-//     });
-//   }
-  
-//   const file = fileInput.files[0];
-//   if (file && file.type.startsWith('image/')) {
-//     try {
-//       displayImage(file);
-//       const fileData = await encryptAndUploadFile(file);
-      
-//       if (currentChatType === 'direct') {
-//         gun.get(`chats`).get(getChatId(user.is.alias, currentChat)).set({
-//           sender: user.is.alias,
-//           type: 'file',
-//           content: fileData,
-//           timestamp: Date.now()
-//         });
-//       } else if (currentChatType === 'group') {
-//         gun.get(`groupChats`).get(currentChat).set({
-//           sender: user.is.alias,
-//           type: 'file',
-//           content: fileData,
-//           timestamp: Date.now()
-//         });
-//       }
-
-//       console.log('File sent successfully!');
-      
-//       fileInput.value = '';
-//     } catch (error) {
-//       console.error('Error sending file:', error);
-//       fileInput.value = '';
-//       await showCustomAlert('Error sending file. Please try again.');
-//     }
-//   } else {
-//     fileInput.value = '';
-//     console.log('No file selected or file not supported. Image files only.');
-//     await showCustomAlertalert('No file selected or file not supported. Image files only.');
-//   }
-// }
-
-// async function receiveAndDecryptFile(fileData) {
-//   try {
-//     console.log(JSON.parse(fileData).cid);
-//     const fileInfo = JSON.parse(fileData)
-//     const response = await fetch(`${IPFS_BACKEND_URL}/getFile`, {
-//       method: 'POST',
-//       headers: {
-//         'Content-Type': 'application/json',
-//       },
-//       body: JSON.stringify({ cid: fileInfo.cid })
-//     });
-
-//     if (!response.ok) {
-//       throw new Error(`HTTP error! status: ${response.status}`);
-//     }
-
-//     const result = await response.json();
-//     const fileUrl = result.result;
-//     const encryptedFileResponse = await fetch(fileUrl);
-//     if (!encryptedFileResponse.ok) {
-//       throw new Error(`File download failed: ${encryptedFileResponse.statusText}`);
-//     }
-
-//     // Get the total size of the file (if available)
-//     const totalSize = parseInt(encryptedFileResponse.headers.get('Content-Length') || '0');
-//     let downloadedSize = 0;
-
-//     // Create a ReadableStream from the response body
-//     const reader = encryptedFileResponse.body.getReader();
-//     const chunks = [];
-
-//     while (true) {
-//       const { done, value } = await reader.read();
-//       if (done) break;
-//       chunks.push(value);
-//       downloadedSize += value.length;
-
-//       // Update download progress
-//       if (totalSize > 0) {
-//         const progress = (downloadedSize / totalSize) * 100;
-//         console.log(`Download progress: ${progress.toFixed(2)}%`);
-//         // You can update a progress bar or other UI element here
-//       }
-//     }
-
-//     // Combine all chunks into a single Uint8Array
-//     const encryptedFile = new Uint8Array(downloadedSize);
-//     let position = 0;
-//     for (const chunk of chunks) {
-//       encryptedFile.set(chunk, position);
-//       position += chunk.length;
-//     }
-//     const symKey = await crypto.subtle.importKey(
-//       "raw",
-//       base64ToArrayBuffer(fileInfo.encryptedSymKey),
-//       { name: "AES-GCM", length: 256 },
-//       false,
-//       ["decrypt"]
-//     );
-//     const decryptedFile = await crypto.subtle.decrypt(
-//       { name: "AES-GCM", iv: base64ToArrayBuffer(fileInfo.iv) },
-//       symKey,
-//       encryptedFile
-//     );
-//     const blob = new Blob([decryptedFile], { type: fileInfo.fileType });
-//     displayImage(blob);
-//   } catch (error) {
-//     console.error('Error receiving file:', error);
-//     await showCustomAlert('Error receiving file. Please try again.');
-//   }
-// }
 
 async function showExpiryDialog() {
   const dialogHtml = `
@@ -1121,34 +826,6 @@ async function deleteFileFromIPFS(cid) {
   }
 }
 
-// function loadMessages(contactAlias) {
-//   const chatId = getChatId(user.is.alias, contactAlias);
-//   gun.get(`chats`).get(chatId).map().on((message, id) => {
-//     if (message && !messagesDiv.querySelector(`[data-id="${id}"]`)) {
-//       const messageElement = document.createElement('div');
-//       if (message.type === 'file') {
-//         console.log(message);
-//         try {
-//           message.content = JSON.parse(message.content);
-//         } catch (err) {
-//           message = message;
-//         }
-//         messageElement.textContent = `${message.sender} sent a file: ${message.content.fileName}`;
-//         const downloadButton = document.createElement('button');
-//         downloadButton.textContent = 'Download';
-//         downloadButton.addEventListener('click', () => receiveAndDecryptFile(message.content));
-//         messageElement.appendChild(downloadButton);
-//       } else {
-//         messageElement.textContent = `${message.sender}: ${message.content}`;
-//       }
-//       messageElement.dataset.id = id;
-//       messageElement.classList.add('message', message.sender === user.is.alias ? 'sent' : 'received');
-//       messagesDiv.appendChild(messageElement);
-//       messagesDiv.scrollTop = messagesDiv.scrollHeight;
-//     }
-//   });
-// }
-
 function loadMessages(contactAlias) {
   const chatId = getChatId(user.is.alias, contactAlias);
   gun.get(`chats`).get(chatId).map().on((message, id) => {
@@ -1161,31 +838,6 @@ function loadGroupMessages(groupId) {
     displayMessage(message, id);
   });
 }
-
-// function displayMessage(message, id) {
-//   if (message && !messagesDiv.querySelector(`[data-id="${id}"]`)) {
-//     const messageElement = document.createElement('div');
-//     if (message.type === 'file' && message.content) {
-//       console.log(message);
-//       try {
-//         message.content = JSON.parse(message.content);
-//       } catch (err) {
-//         console.error('Error parsing file content:', err);
-//       }
-//       messageElement.textContent = `${message.sender} sent a file: ${message.content.fileName}`;
-//       const downloadButton = document.createElement('button');
-//       downloadButton.textContent = 'Download';
-//       downloadButton.addEventListener('click', () => receiveAndDecryptFile(message.content));
-//       messageElement.appendChild(downloadButton);
-//     } else {
-//       messageElement.textContent = `${message.sender}: ${message.content}`;
-//     }
-//     messageElement.dataset.id = id;
-//     messageElement.classList.add('message', message.sender === user.is.alias ? 'sent' : 'received');
-//     messagesDiv.appendChild(messageElement);
-//     messagesDiv.scrollTop = messagesDiv.scrollHeight;
-//   }
-// }
 
 function displayMessage(message, id) {
   if (message && !messagesDiv.querySelector(`[data-id="${id}"]`)) {
@@ -1408,15 +1060,6 @@ function updateTypingIndicator(username, isTyping) {
   }
 }
 
-// function clearTypingIndicators() {
-//   const typingContainer = document.getElementById('typingContainer');
-//   typingContainer.innerHTML = '';
-//   if (typingTimeout) {
-//     clearTimeout(typingTimeout);
-//     sendTypingStatus(false);
-//   }
-// }
-
 function clearChat() {
   if (typingTimeout) {
     clearTimeout(typingTimeout);
@@ -1515,15 +1158,17 @@ async function startCall(withVideo = false) {
   try {
     isCallInProgress = true;
     isVideoCall = withVideo;
+    
+    // Get media stream first
     const mediaConstraints = { audio: true, video: withVideo };
     localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-    console.log('Local stream obtained:', localStream.getTracks());
     
     if (withVideo) {
       document.getElementById('localVideo').srcObject = localStream;
       document.getElementById('videoContainer').classList.remove('hidden');
     }
     
+    // Create peer connection and get offer
     peerConnection = await webrtcHandler.createPeerConnection();
     const offer = await webrtcHandler.startCall(localStream);
     
@@ -1536,7 +1181,7 @@ async function startCall(withVideo = false) {
       isVideo: withVideo
     };
 
-    // Create the call data structure
+    // Save call data with initial connecting status
     const callData = {
       type: 'offer',
       callId: callId,
@@ -1546,37 +1191,40 @@ async function startCall(withVideo = false) {
       offerSdp: offer.sdp,
       startTime: currentCall.startTime,
       isVideo: withVideo,
-      status: 'pending'
+      status: 'connecting'
     };
 
-    // Save call data with explicit path
-    gun.get('calls').get(callId).put(callData, (ack) => {
-      if (ack.err) {
-        console.error('Error saving call data:', ack.err);
-        endCall();
-        return;
-      }
-      console.log('Call data saved successfully:', callData);
-    });
-
-    // Verify the call data was saved
-    gun.get('calls').get(callId).once((data) => {
-      console.log('Verified call data:', data);
-    });
-
-    // Setup ICE candidate handling
-    setupICECandidateListener(callId);
-    
-    // Update UI
+    // Update UI immediately
     startVoiceCallBtn.classList.add('hidden');
     startVideoCallBtn.classList.add('hidden');
     endCallBtn.classList.remove('hidden');
 
-    // Set a timeout to check if the call was established
+    // Setup ICE candidate listener before saving call data
+    setupICECandidateListener(callId);
+
+    // Save call data
+    await new Promise((resolve, reject) => {
+      gun.get('calls').get(callId).put(callData, (ack) => {
+        if (ack.err) {
+          reject(new Error(ack.err));
+        } else {
+          resolve();
+        }
+      });
+    });
+
+    // Monitor call state changes
+    gun.get('calls').get(callId).on((data) => {
+      if (data.status === 'error' || data.status === 'rejected') {
+        endCall();
+        showCustomAlert(`Call ${data.status}: ${data.reason || 'Unknown reason'}`);
+      }
+    });
+
+    // Set timeout for call establishment
     setTimeout(async () => {
       gun.get('calls').get(callId).once((data) => {
-        if (data?.status === 'pending') {
-          console.log('Call setup timeout. Status:', data?.status);
+        if (data?.status === 'connecting' || data?.status === 'notified') {
           showCustomAlert('Call setup timed out. Please try again.');
           endCall();
         }
@@ -1594,7 +1242,6 @@ async function startCall(withVideo = false) {
   }
 }
 
-// Add a function to monitor call state
 function monitorCallState(callId) {
   return new Promise((resolve) => {
     const unsubscribe = gun.get('calls').get(callId).on((data) => {
@@ -1607,10 +1254,8 @@ function monitorCallState(callId) {
   });
 }
 
-// Modify the handleIncomingCall function:
 async function handleIncomingCall(data) {
   if (isCallInProgress) {
-    console.log('Already in a call, rejecting incoming call');
     gun.get('calls').get(data.callId).put({
       ...data,
       status: 'rejected',
@@ -1619,12 +1264,22 @@ async function handleIncomingCall(data) {
     return;
   }
 
-  const callType = data.isVideo ? 'video' : 'voice';
-  const confirmed = confirm(`Incoming ${callType} call from ${data.from}. Accept?`);
-  
-  if (confirmed) {
-    try {
-      // Update call status
+  try {
+    // Verify call state
+    const currentState = await new Promise(resolve => {
+      gun.get('calls').get(data.callId).once(state => resolve(state));
+    });
+
+    if (currentState.status !== 'notified') {
+      console.log('Invalid call state:', currentState.status);
+      return;
+    }
+
+    const callType = data.isVideo ? 'video' : 'voice';
+    const confirmed = await showCustomConfirm(`Incoming ${callType} call from ${data.from}. Accept?`);
+
+    if (confirmed) {
+      // Update call status immediately
       gun.get('calls').get(data.callId).put({
         ...data,
         status: 'accepted',
@@ -1633,6 +1288,8 @@ async function handleIncomingCall(data) {
 
       isCallInProgress = true;
       isVideoCall = data.isVideo;
+      
+      // Set up media
       const mediaConstraints = { audio: true, video: data.isVideo };
       localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
       
@@ -1641,6 +1298,7 @@ async function handleIncomingCall(data) {
         document.getElementById('videoContainer').classList.remove('hidden');
       }
       
+      // Set up WebRTC connection
       peerConnection = await webrtcHandler.createPeerConnection();
       
       const offer = {
@@ -1658,40 +1316,43 @@ async function handleIncomingCall(data) {
         isVideo: data.isVideo
       };
 
-      const answerData = {
+      // Send answer
+      gun.get('calls').get(data.callId).put({
         type: 'answer',
-        callId: data.callId,
         from: user.is.alias,
         to: data.from,
         answerType: answer.type,
         answerSdp: answer.sdp,
-        time: currentCall.startTime
-      };
+        time: Date.now()
+      });
 
-      gun.get('calls').get(data.callId).put(answerData);
-      
       // Update UI
       startVoiceCallBtn.classList.add('hidden');
       startVideoCallBtn.classList.add('hidden');
       endCallBtn.classList.remove('hidden');
 
-    } catch (error) {
-      console.error('Error accepting call:', error);
+      // Setup ICE handling
+      setupICECandidateListener(data.callId);
+      sendBufferedICECandidates(data.callId);
+
+    } else {
       gun.get('calls').get(data.callId).put({
         ...data,
-        status: 'failed',
-        error: error.message
+        status: 'rejected',
+        reason: 'declined',
+        time: Date.now()
       });
-      await showCustomAlert(`Error accepting call: ${error.message}`);
-      endCall();
     }
-  } else {
+  } catch (error) {
+    console.error('Error handling incoming call:', error);
     gun.get('calls').get(data.callId).put({
       ...data,
-      status: 'rejected',
-      reason: 'declined',
+      status: 'error',
+      error: error.message,
       time: Date.now()
     });
+    await showCustomAlert(`Error accepting call: ${error.message}`);
+    endCall();
   }
 }
 
