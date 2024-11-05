@@ -412,34 +412,59 @@ function setupGroupInvitationListener() {
   });
 }
 
-
 function endCall() {
-  if (peerConnection) {
-    peerConnection.close();
-    peerConnection = null;
-  }
-  if (localStream) {
-    localStream.getTracks().forEach(track => track.stop());
-    localStream = null;
-  }
-  remoteAudio.srcObject = null;
-  document.getElementById('remoteVideo').srcObject = null;
-  document.getElementById('localVideo').srcObject = null;
-  document.getElementById('videoContainer').classList.add('hidden');
+  console.log('Ending call...');
+  
   if (currentCall) {
     gun.get(`calls`).get(currentCall.id).put({ 
       type: 'end',
       from: user.is.alias,
       to: currentCall.to,
-      endTime: Date.now()
+      endTime: Date.now(),
+      status: 'ended'
     });
-    currentCall = null;
   }
+
+  if (peerConnection) {
+    try {
+      peerConnection.close();
+    } catch (error) {
+      console.error('Error closing peer connection:', error);
+    }
+    peerConnection = null;
+  }
+
+  if (localStream) {
+    try {
+      localStream.getTracks().forEach(track => track.stop());
+    } catch (error) {
+      console.error('Error stopping local stream:', error);
+    }
+    localStream = null;
+  }
+
+  // Reset UI elements
+  try {
+    const remoteAudio = document.getElementById('remoteAudio');
+    const remoteVideo = document.getElementById('remoteVideo');
+    const localVideo = document.getElementById('localVideo');
+    
+    if (remoteAudio) remoteAudio.srcObject = null;
+    if (remoteVideo) remoteVideo.srcObject = null;
+    if (localVideo) localVideo.srcObject = null;
+    
+    document.getElementById('videoContainer').classList.add('hidden');
+    startVoiceCallBtn.classList.remove('hidden');
+    startVideoCallBtn.classList.remove('hidden');
+    endCallBtn.classList.add('hidden');
+  } catch (error) {
+    console.error('Error resetting UI:', error);
+  }
+
+  // Reset state
+  currentCall = null;
   isCallInProgress = false;
   isVideoCall = false;
-  startVoiceCallBtn.classList.remove('hidden');
-  document.getElementById('startVideoCall').classList.remove('hidden');
-  document.getElementById('endCall').classList.add('hidden');
 }
 
 function initializeWebRTC() {
@@ -1148,7 +1173,6 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
-
 async function startCall(withVideo = false) {
   if (isCallInProgress || currentChatType !== 'direct') {
     await showCustomAlert('A call is already in progress or you\'re not in a direct chat.');
@@ -1202,7 +1226,7 @@ async function startCall(withVideo = false) {
     // Setup ICE candidate listener before saving call data
     setupICECandidateListener(callId);
 
-    // Save call data
+    // Save call data with explicit acknowledgment
     await new Promise((resolve, reject) => {
       gun.get('calls').get(callId).put(callData, (ack) => {
         if (ack.err) {
@@ -1215,16 +1239,19 @@ async function startCall(withVideo = false) {
 
     // Monitor call state changes
     gun.get('calls').get(callId).on((data) => {
+      console.log('Call state updated:', data);
       if (data.status === 'error' || data.status === 'rejected') {
         endCall();
         showCustomAlert(`Call ${data.status}: ${data.reason || 'Unknown reason'}`);
+      } else if (data.status === 'connected') {
+        console.log('Call connected successfully');
       }
     });
 
     // Set timeout for call establishment
     setTimeout(async () => {
       gun.get('calls').get(callId).once((data) => {
-        if (data?.status === 'connecting' || data?.status === 'notified') {
+        if (!data || data.status === 'connecting' || data.status === 'notified') {
           showCustomAlert('Call setup timed out. Please try again.');
           endCall();
         }
@@ -1255,7 +1282,13 @@ function monitorCallState(callId) {
 }
 
 async function handleIncomingCall(data) {
+  if (!data || !data.callId) {
+    console.error('Invalid call data received:', data);
+    return;
+  }
+
   if (isCallInProgress) {
+    console.log('Already in a call, rejecting incoming call');
     gun.get('calls').get(data.callId).put({
       ...data,
       status: 'rejected',
@@ -1265,25 +1298,22 @@ async function handleIncomingCall(data) {
   }
 
   try {
-    // Verify call state
-    const currentState = await new Promise(resolve => {
-      gun.get('calls').get(data.callId).once(state => resolve(state));
-    });
-
-    if (currentState.status !== 'notified') {
-      console.log('Invalid call state:', currentState.status);
-      return;
-    }
-
     const callType = data.isVideo ? 'video' : 'voice';
     const confirmed = await showCustomConfirm(`Incoming ${callType} call from ${data.from}. Accept?`);
 
     if (confirmed) {
       // Update call status immediately
-      gun.get('calls').get(data.callId).put({
-        ...data,
-        status: 'accepted',
-        acceptTime: Date.now()
+      await new Promise((resolve) => {
+        gun.get('calls').get(data.callId).put({
+          ...data,
+          status: 'accepted',
+          acceptTime: Date.now()
+        }, (ack) => {
+          if (ack.err) {
+            console.error('Error updating call status:', ack.err);
+          }
+          resolve();
+        });
       });
 
       isCallInProgress = true;
@@ -1317,13 +1347,21 @@ async function handleIncomingCall(data) {
       };
 
       // Send answer
-      gun.get('calls').get(data.callId).put({
-        type: 'answer',
-        from: user.is.alias,
-        to: data.from,
-        answerType: answer.type,
-        answerSdp: answer.sdp,
-        time: Date.now()
+      await new Promise((resolve) => {
+        gun.get('calls').get(data.callId).put({
+          type: 'answer',
+          from: user.is.alias,
+          to: data.from,
+          answerType: answer.type,
+          answerSdp: answer.sdp,
+          time: Date.now(),
+          status: 'connected'
+        }, (ack) => {
+          if (ack.err) {
+            console.error('Error sending answer:', ack.err);
+          }
+          resolve();
+        });
       });
 
       // Update UI
@@ -1336,6 +1374,7 @@ async function handleIncomingCall(data) {
       sendBufferedICECandidates(data.callId);
 
     } else {
+      // Reject the call
       gun.get('calls').get(data.callId).put({
         ...data,
         status: 'rejected',
@@ -1356,6 +1395,30 @@ async function handleIncomingCall(data) {
   }
 }
 
+function checkWebRTCSetup() {
+  if (!webrtcHandler) {
+    console.error('WebRTC handler not initialized');
+    return false;
+  }
+  
+  if (!peerConnection) {
+    console.error('No peer connection available');
+    return false;
+  }
+  
+  // Check connection state if it exists
+  if (peerConnection.connectionState) {
+    console.log('Connection state:', peerConnection.connectionState);
+  }
+  
+  // Check ICE connection state
+  if (peerConnection.iceConnectionState) {
+    console.log('ICE connection state:', peerConnection.iceConnectionState);
+  }
+  
+  return true;
+}
+
 
 (async function () {
   const urlString = window.location.href;
@@ -1374,5 +1437,10 @@ async function handleIncomingCall(data) {
   }
 })();
 
+setInterval(() => {
+  if (isCallInProgress) {
+    checkWebRTCSetup();
+  }
+}, 5000);
 
 
