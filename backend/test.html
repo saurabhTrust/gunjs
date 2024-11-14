@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LibP2P Test</title>
+    <style>
+        .log-container {
+            margin: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            background: #f5f5f5;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h2>LibP2P Test Module</h2>
+    <div id="status">Initializing...</div>
+    <div class="log-container" id="logContainer"></div>
+
+    <!-- Import as ES modules -->
+    <script type="module">
+        import 'https://cdn.jsdelivr.net/npm/@libp2p/webrtc-star@8.0.0/+esm'
+        import { noise } from 'https://cdn.jsdelivr.net/npm/@chainsafe/libp2p-noise@13.0.0/+esm'
+        import { mplex } from 'https://cdn.jsdelivr.net/npm/@libp2p/mplex@9.0.6/+esm'
+        import { createLibp2p } from 'https://cdn.jsdelivr.net/npm/libp2p@0.46.6/+esm'
+        import { webSockets } from 'https://cdn.jsdelivr.net/npm/@libp2p/websockets@1.0.12/+esm'
+        import { webRTC } from 'https://cdn.jsdelivr.net/npm/@libp2p/webrtc@1.1.7/+esm'
+
+        function log(message, type = 'info') {
+            const logContainer = document.getElementById('logContainer');
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type}`;
+            logEntry.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            console.log(message);
+        }
+
+        async function initNode() {
+            try {
+                log('Creating libp2p node configuration...');
+
+                const nodeConfig = {
+                    addresses: {
+                        listen: ['/dns4/wrtc-star1.par.dwebops.pub/tcp/443/wss/p2p-webrtc-star']
+                    },
+                    transports: [webSockets(), webRTC()],
+                    streamMuxers: [mplex()],
+                    connectionEncryption: [noise()],
+                    config: {
+                        relay: {
+                            enabled: true,
+                            hop: {
+                                enabled: true,
+                                active: false
+                            }
+                        }
+                    }
+                };
+
+                log('Node configuration created', 'success');
+
+                log('Creating libp2p node...');
+                const node = await createLibp2p(nodeConfig);
+                
+                log('Node created successfully', 'success');
+                log('Starting node...');
+                
+                await node.start();
+                log('Node started successfully', 'success');
+                
+                // Log node details
+                log(`Node ID: ${node.peerId.toString()}`, 'info');
+
+                // Set up event listeners
+                node.addEventListener('peer:discovery', (evt) => {
+                    log(`Discovered peer: ${evt.detail.id.toString()}`, 'info');
+                });
+
+                node.addEventListener('peer:connect', (evt) => {
+                    log(`Connected to peer: ${evt.detail.remotePeer.toString()}`, 'success');
+                });
+
+                document.getElementById('status').textContent = 'Node is running!';
+                return node;
+            } catch (err) {
+                log(`Error creating node: ${err.message}`, 'error');
+                log(`Stack trace: ${err.stack}`, 'error');
+                document.getElementById('status').textContent = 'Failed to start node';
+                throw err;
+            }
+        }
+
+        async function runTests() {
+            try {
+                log('Starting LibP2P tests...');
+                
+                // Test 1: Initialize node
+                const node = await initNode();
+                log('Test 1: Node initialization successful', 'success');
+
+                // Test 2: Check node properties
+                log('Test 2: Checking node properties...');
+                log(`PeerId available: ${Boolean(node.peerId)}`, 'info');
+
+                // Test 3: Test peer discovery
+                log('Test 3: Waiting for peer discovery...');
+                setTimeout(() => {
+                    const peers = Array.from(node.getPeers());
+                    log(`Current peer count: ${peers.length}`, 'info');
+                }, 5000);
+
+                return node;
+            } catch (error) {
+                log(`Test failed: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+
+        // Start tests when page loads
+        window.addEventListener('load', async () => {
+            try {
+                log('Page loaded, starting tests...');
+                const node = await runTests();
+                log('All tests completed successfully', 'success');
+                // Make node available for console testing
+                window.testNode = node;
+            } catch (error) {
+                log(`Setup failed: ${error}`, 'error');
+            }
+        });
+    </script>
+</body>
+</html>

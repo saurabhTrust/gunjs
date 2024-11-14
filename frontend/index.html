@@ -7,6 +7,12 @@
     <title>Decentralized End-to-End Messenger</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/libp2p@0.46.9/dist/index.min.js" type="script"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@libp2p/webrtc-star@8.0.0/dist/index.min.js" type="script"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@chainsafe/libp2p-noise@13.0.0/dist/index.min.js" type="script"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@libp2p/websockets@8.0.3/dist/index.min.js" type="script"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@libp2p/mplex@9.0.3/dist/index.min.js" type="script"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@libp2p/bootstrap@10.0.3/dist/index.min.js" type="script"></script>
 </head>
 
 <body>
@@ -24,6 +30,22 @@
         </div>
 
         <div id="chat" class="hidden chat-room-container">
+            <div id="p2pStatus" class="p2p-status hidden">
+                <div class="status-indicator">
+                    <span id="relayStatus" class="status-dot"></span>
+                    <span id="relayStatusText">Initializing P2P...</span>
+                </div>
+                <div class="relay-info hidden" id="relayInfo">
+                    <div class="info-item">
+                        <span class="info-label">Bandwidth:</span>
+                        <span id="bandwidthValue">Measuring...</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Connections:</span>
+                        <span id="connectionsValue">0/0</span>
+                    </div>
+                </div>
+            </div>
             <div id="sidebar">
                 <div class="sidebar-tabs">
                     <div class="sidebar-tab active" data-tab="contacts">Contacts</div>
@@ -59,6 +81,10 @@
                     <!-- <button id="endVoiceCall" type="button" class="hidden recendButton primary-button-style"><i
                             class="fas fa-phone-slash"></i></button> -->
                     <button id="endCall" type="button" class="hidden recendButton primary-button-style"><i class="fas fa-phone-slash"></i></button>
+                    <div id="relayIndicator" class="relay-indicator hidden">
+                        <i class="fas fa-random"></i>
+                        <span id="relayPeerInfo">Direct Connection</span>
+                    </div>
                 </div>
                 <div id="videoContainer" class="hidden">
                     <video id="localVideo" autoplay muted></video>
@@ -101,9 +127,33 @@
             </div>
         </div>
     </div>
+    <div id="relayMetricsModal" class="custom-dialog hidden">
+        <div class="dialog-content">
+            <h3>Relay Node Metrics</h3>
+            <div class="metrics-container">
+                <div class="metric-item">
+                    <span class="metric-label">Status:</span>
+                    <span id="metricRelayStatus">-</span>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-label">Bandwidth:</span>
+                    <span id="metricBandwidth">-</span>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-label">Active Connections:</span>
+                    <span id="metricConnections">-</span>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-label">Data Relayed:</span>
+                    <span id="metricDataRelayed">-</span>
+                </div>
+            </div>
+            <button class="primary-button-style" id="closeMetrics">Close</button>
+        </div>
+    </div>
     <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/ipfs-http-client/dist/index.min.js"></script>
+    <script src="p2pRelay.js"></script>
     <script src="notification-worker.js"></script>
     <script src="webrtc.js"></script>
     <script src="app.js"></script>
@@ -273,6 +323,45 @@
                 acceptButton.addEventListener('click', handleAccept);
                 rejectButton.addEventListener('click', handleReject);
             });
+        }
+    </script>
+    <script>
+        function updateP2PStatus(status) {
+            const statusDot = document.getElementById('relayStatus');
+            const statusText = document.getElementById('relayStatusText');
+            const relayInfo = document.getElementById('relayInfo');
+
+            document.getElementById('p2pStatus').classList.remove('hidden');
+
+            if (status.isRelay) {
+                statusDot.classList.add('active');
+                statusText.textContent = 'Relay Node Active';
+                relayInfo.classList.remove('hidden');
+            } else {
+                statusDot.classList.remove('active');
+                statusText.textContent = 'P2P Connected';
+                relayInfo.classList.add('hidden');
+            }
+        }
+
+        function updateRelayMetrics(metrics) {
+            document.getElementById('bandwidthValue').textContent = 
+                `${(metrics.bandwidth / (1024 * 1024)).toFixed(2)} Mbps`;
+            document.getElementById('connectionsValue').textContent = 
+                `${metrics.currentConnections}/${metrics.maxConnections}`;
+        }
+
+        function updateRelayIndicator(isRelayed, relayPeer = null) {
+            const indicator = document.getElementById('relayIndicator');
+            const info = document.getElementById('relayPeerInfo');
+
+            if (isRelayed && relayPeer) {
+                indicator.classList.remove('hidden');
+                info.textContent = `Via Relay: ${relayPeer}`;
+            } else {
+                indicator.classList.remove('hidden');
+                info.textContent = 'Direct Connection';
+            }
         }
     </script>
 </body>

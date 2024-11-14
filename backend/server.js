@@ -14,7 +14,7 @@ const processedEvents = new LRUCache({
 });
 
 const app = express();
-const PORT = process.env.PORT || 3005;
+const PORT = process.env.PORT || 3010;
 
 // Serve frontend files
 app.use(express.static(path.join(__dirname, '../frontend')));

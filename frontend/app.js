@@ -19,6 +19,8 @@ const processedCandidates = new Set();
 let signalingState = 'stable';
 let processingCall = false;
 let callProcessingTimeout = null;
+let p2pRelayInitialized = false;
+let currentPeerConnection = null;
 
 // DOM Elements
 const authDiv = document.getElementById('auth');
@@ -414,40 +416,82 @@ function setupGroupInvitationListener() {
   });
 }
 
+// async function endCall() {
+//   if (callProcessingTimeout) {
+//     clearTimeout(callProcessingTimeout);
+//     callProcessingTimeout = null;
+//   }
+
+//   if (currentCall) {
+//     await new Promise((resolve) => {
+//       gun.get('calls').get(currentCall.id).put({
+//         type: 'end',
+//         from: user.is.alias,
+//         to: currentCall.to,
+//         endTime: Date.now(),
+//         status: 'ended'
+//       }, resolve);
+//     });
+//   }
+
+//   if (peerConnection) {
+//     try {
+//       peerConnection.close();
+//     } catch (error) {
+//       console.error('Error closing peer connection:', error);
+//     }
+//     peerConnection = null;
+//   }
+
+//   if (localStream) {
+//     try {
+//       localStream.getTracks().forEach(track => track.stop());
+//     } catch (error) {
+//       console.error('Error stopping local stream:', error);
+//     }
+//     localStream = null;
+//   }
+
+//   // Reset UI elements
+//   const remoteAudio = document.getElementById('remoteAudio');
+//   const remoteVideo = document.getElementById('remoteVideo');
+//   const localVideo = document.getElementById('localVideo');
+  
+//   if (remoteAudio) remoteAudio.srcObject = null;
+//   if (remoteVideo) remoteVideo.srcObject = null;
+//   if (localVideo) localVideo.srcObject = null;
+  
+//   document.getElementById('videoContainer').classList.add('hidden');
+//   updateCallUI(false);
+
+//   // Reset state
+//   currentCall = null;
+//   isCallInProgress = false;
+//   isVideoCall = false;
+//   signalingState = 'stable';
+//   processingCall = false;
+// }
+
 async function endCall() {
   if (callProcessingTimeout) {
-    clearTimeout(callProcessingTimeout);
-    callProcessingTimeout = null;
+      clearTimeout(callProcessingTimeout);
+      callProcessingTimeout = null;
   }
 
   if (currentCall) {
-    await new Promise((resolve) => {
-      gun.get('calls').get(currentCall.id).put({
-        type: 'end',
-        from: user.is.alias,
-        to: currentCall.to,
-        endTime: Date.now(),
-        status: 'ended'
-      }, resolve);
-    });
+      await new Promise((resolve) => {
+          gun.get('calls').get(currentCall.id).put({
+              type: 'end',
+              from: user.is.alias,
+              to: currentCall.to,
+              endTime: Date.now(),
+              status: 'ended'
+          }, resolve);
+      });
   }
 
-  if (peerConnection) {
-    try {
-      peerConnection.close();
-    } catch (error) {
-      console.error('Error closing peer connection:', error);
-    }
-    peerConnection = null;
-  }
-
-  if (localStream) {
-    try {
-      localStream.getTracks().forEach(track => track.stop());
-    } catch (error) {
-      console.error('Error stopping local stream:', error);
-    }
-    localStream = null;
+  if (webrtcHandler) {
+      webrtcHandler.closeConnection();
   }
 
   // Reset UI elements
@@ -468,17 +512,16 @@ async function endCall() {
   isVideoCall = false;
   signalingState = 'stable';
   processingCall = false;
+  currentPeerConnection = null;
 }
 
-function initializeWebRTC() {
+async function initializeWebRTC() {
   webrtcHandler = new WebRTCHandler(
     handleICECandidate,
     handleTrack
-    // (event) => {
-    //   console.log('Received remote track:', event.track.kind);
-    //   remoteAudio.srcObject = event.streams[0];
-    // }
-  );
+);
+await webrtcHandler.init(); // Initialize P2PRelay
+p2pRelayInitialized = true;
 }
 
 
@@ -1176,78 +1219,150 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
+// async function startCall(withVideo = false) {
+//   if (isCallInProgress || currentChatType !== 'direct') {
+//     await showCustomAlert('A call is already in progress or you\'re not in a direct chat.');
+//     return;
+//   }
+
+//   try {
+//     isCallInProgress = true;
+//     isVideoCall = withVideo;
+    
+//     // Get media stream first
+//     const mediaConstraints = { audio: true, video: withVideo };
+//     localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+    
+//     if (withVideo) {
+//       document.getElementById('localVideo').srcObject = localStream;
+//       document.getElementById('videoContainer').classList.remove('hidden');
+//     }
+    
+//     // Create peer connection and get offer
+//     peerConnection = await webrtcHandler.createPeerConnection();
+//     const offer = await webrtcHandler.startCall(localStream);
+    
+//     const callId = Date.now().toString();
+//     currentCall = {
+//       id: callId,
+//       to: currentChat,
+//       from: user.is.alias,
+//       startTime: Date.now(),
+//       isVideo: withVideo
+//     };
+
+//     // Update UI immediately
+//     startVoiceCallBtn.classList.add('hidden');
+//     startVideoCallBtn.classList.add('hidden');
+//     endCallBtn.classList.remove('hidden');
+
+//     // Setup ICE candidate listener before saving call data
+//     setupICECandidateListener(callId);
+
+//     // Save call data with explicit acknowledgment
+//     const callData = {
+//       type: 'offer',
+//       callId: callId,
+//       from: user.is.alias,
+//       to: currentChat,
+//       offerType: offer.type,
+//       offerSdp: offer.sdp,
+//       startTime: currentCall.startTime,
+//       isVideo: withVideo,
+//       status: 'connecting'
+//     };
+
+//     await new Promise((resolve, reject) => {
+//       gun.get('calls').get(callId).put(callData, (ack) => {
+//         if (ack.err) reject(new Error(ack.err));
+//         else resolve();
+//       });
+//     });
+
+//     // Set timeout for call establishment
+//     callProcessingTimeout = setTimeout(() => {
+//       if (isCallInProgress && peerConnection?.iceConnectionState !== 'connected') {
+//         endCall();
+//         showCustomAlert('Call setup timed out. Please try again.');
+//       }
+//     }, 30000);
+
+//   } catch (error) {
+//     console.error('Error starting call:', error);
+//     await showCustomAlert('Error starting call: ' + error.message);
+//     await endCall();
+//   }
+// }
+
 async function startCall(withVideo = false) {
   if (isCallInProgress || currentChatType !== 'direct') {
-    await showCustomAlert('A call is already in progress or you\'re not in a direct chat.');
-    return;
+      await showCustomAlert('A call is already in progress or you\'re not in a direct chat.');
+      return;
   }
 
   try {
-    isCallInProgress = true;
-    isVideoCall = withVideo;
-    
-    // Get media stream first
-    const mediaConstraints = { audio: true, video: withVideo };
-    localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-    
-    if (withVideo) {
-      document.getElementById('localVideo').srcObject = localStream;
-      document.getElementById('videoContainer').classList.remove('hidden');
-    }
-    
-    // Create peer connection and get offer
-    peerConnection = await webrtcHandler.createPeerConnection();
-    const offer = await webrtcHandler.startCall(localStream);
-    
-    const callId = Date.now().toString();
-    currentCall = {
-      id: callId,
-      to: currentChat,
-      from: user.is.alias,
-      startTime: Date.now(),
-      isVideo: withVideo
-    };
-
-    // Update UI immediately
-    startVoiceCallBtn.classList.add('hidden');
-    startVideoCallBtn.classList.add('hidden');
-    endCallBtn.classList.remove('hidden');
-
-    // Setup ICE candidate listener before saving call data
-    setupICECandidateListener(callId);
-
-    // Save call data with explicit acknowledgment
-    const callData = {
-      type: 'offer',
-      callId: callId,
-      from: user.is.alias,
-      to: currentChat,
-      offerType: offer.type,
-      offerSdp: offer.sdp,
-      startTime: currentCall.startTime,
-      isVideo: withVideo,
-      status: 'connecting'
-    };
-
-    await new Promise((resolve, reject) => {
-      gun.get('calls').get(callId).put(callData, (ack) => {
-        if (ack.err) reject(new Error(ack.err));
-        else resolve();
-      });
-    });
-
-    // Set timeout for call establishment
-    callProcessingTimeout = setTimeout(() => {
-      if (isCallInProgress && peerConnection?.iceConnectionState !== 'connected') {
-        endCall();
-        showCustomAlert('Call setup timed out. Please try again.');
+      isCallInProgress = true;
+      isVideoCall = withVideo;
+      
+      const mediaConstraints = { audio: true, video: withVideo };
+      localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+      
+      if (withVideo) {
+          document.getElementById('localVideo').srcObject = localStream;
+          document.getElementById('videoContainer').classList.remove('hidden');
       }
-    }, 30000);
+
+      // Create peer connection and get offer
+      currentPeerConnection = await webrtcHandler.createPeerConnection();
+      const offer = await webrtcHandler.startCall(localStream);
+      
+      const callId = Date.now().toString();
+      currentCall = {
+          id: callId,
+          to: currentChat,
+          from: user.is.alias,
+          startTime: Date.now(),
+          isVideo: withVideo
+      };
+
+      // Update UI immediately
+      updateCallUI(true);
+
+      // Setup ICE candidate listener before saving call data
+      setupICECandidateListener(callId);
+
+      // Save call data with explicit acknowledgment
+      const callData = {
+          type: 'offer',
+          callId: callId,
+          from: user.is.alias,
+          to: currentChat,
+          offerType: offer.type,
+          offerSdp: offer.sdp,
+          startTime: currentCall.startTime,
+          isVideo: withVideo,
+          status: 'connecting'
+      };
+
+      await new Promise((resolve, reject) => {
+          gun.get('calls').get(callId).put(callData, (ack) => {
+              if (ack.err) reject(new Error(ack.err));
+              else resolve();
+          });
+      });
+
+      // Set timeout for call establishment
+      callProcessingTimeout = setTimeout(() => {
+          if (isCallInProgress && currentPeerConnection?.iceConnectionState !== 'connected') {
+              endCall();
+              showCustomAlert('Call setup timed out. Please try again.');
+          }
+      }, 30000);
 
   } catch (error) {
-    console.error('Error starting call:', error);
-    await showCustomAlert('Error starting call: ' + error.message);
-    await endCall();
+      console.error('Error starting call:', error);
+      await showCustomAlert('Error starting call: ' + error.message);
+      await endCall();
   }
 }
 
@@ -1264,90 +1379,74 @@ function monitorCallState(callId) {
 }
 
 async function handleIncomingCall(data) {
-  // Validate call data
-  if (!data || !data.callId) {
-    console.error('Invalid call data received:', data);
-    return;
-  }
-
-  // Prevent processing multiple calls simultaneously
-  if (processingCall || isCallInProgress) {
-    console.log('Already processing/in a call, rejecting incoming call');
-    await rejectCall(data, 'busy');
-    return;
+  if (!data || !data.callId || processingCall || isCallInProgress) {
+      console.log('Cannot handle incoming call');
+      await rejectCall(data, 'busy');
+      return;
   }
 
   try {
-    processingCall = true;
-    const confirmed = confirm(`Incoming ${data.isVideo ? 'video' : 'voice'} call from ${data.from}. Accept?`);
+      processingCall = true;
+      const confirmed = await showCustomConfirm(
+          `Incoming ${data.isVideo ? 'video' : 'voice'} call from ${data.from}. Accept?`
+      );
 
-    if (!confirmed) {
-      await rejectCall(data, 'declined');
-      return;
-    }
+      if (!confirmed) {
+          await rejectCall(data, 'declined');
+          return;
+      }
 
-    // Initialize call state
-    isCallInProgress = true;
-    isVideoCall = data.isVideo;
-    
-    // Get media stream
-    const mediaConstraints = { audio: true, video: data.isVideo };
-    localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-    
-    if (data.isVideo) {
-      document.getElementById('localVideo').srcObject = localStream;
-      document.getElementById('videoContainer').classList.remove('hidden');
-    }
+      // Initialize call state
+      isCallInProgress = true;
+      isVideoCall = data.isVideo;
+      
+      const mediaConstraints = { audio: true, video: data.isVideo };
+      localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+      
+      if (data.isVideo) {
+          document.getElementById('localVideo').srcObject = localStream;
+          document.getElementById('videoContainer').classList.remove('hidden');
+      }
 
-    // Create and setup peer connection
-    peerConnection = await webrtcHandler.createPeerConnection();
-    
-    // Handle the offer
-    const offer = {
-      type: data.offerType,
-      sdp: data.offerSdp
-    };
+      currentPeerConnection = await webrtcHandler.createPeerConnection();
+      
+      const offer = {
+          type: data.offerType,
+          sdp: data.offerSdp
+      };
 
-    // Set remote description and create answer
-    await peerConnection.setRemoteDescription(offer);
-    const answer = await webrtcHandler.handleIncomingCall(offer, localStream);
-    
-    // Update call state
-    currentCall = {
-      id: data.callId,
-      to: data.from,
-      from: user.is.alias,
-      startTime: Date.now(),
-      isVideo: data.isVideo
-    };
+      const answer = await webrtcHandler.handleIncomingCall(offer, localStream);
+      
+      currentCall = {
+          id: data.callId,
+          to: data.from,
+          from: user.is.alias,
+          startTime: Date.now(),
+          isVideo: data.isVideo
+      };
 
-    // Send answer
-    await new Promise((resolve) => {
-      gun.get('calls').get(data.callId).put({
-        type: 'answer',
-        from: user.is.alias,
-        to: data.from,
-        answerType: answer.type,
-        answerSdp: answer.sdp,
-        time: Date.now(),
-        status: 'accepted'
-      }, resolve);
-    });
+      await new Promise((resolve) => {
+          gun.get('calls').get(data.callId).put({
+              type: 'answer',
+              from: user.is.alias,
+              to: data.from,
+              answerType: answer.type,
+              answerSdp: answer.sdp,
+              time: Date.now(),
+              status: 'accepted'
+          }, resolve);
+      });
 
-    // Setup ICE handling
-    setupICECandidateListener(data.callId);
-    sendBufferedICECandidates(data.callId);
-
-    // Update UI
-    updateCallUI(true);
+      setupICECandidateListener(data.callId);
+      updateCallUI(true);
 
   } catch (error) {
-    console.error('Error handling incoming call:', error);
-    await rejectCall(data, 'error');
-    await showCustomAlert(`Error accepting call: ${error.message}`);
-    await endCall();
+      console.error('Error handling incoming call:', error);
+      await rejectCall(data, 'error');
+      await showCustomAlert(`Error accepting call: ${error.message}`);
+      await endCall();
   } finally {
-    processingCall = false;
+      processingCall = false;
   }
 }
 
@@ -1421,4 +1520,19 @@ setInterval(() => {
   }
 }, 5000);
 
+
+function monitorP2PRelayStatus() {
+  if (webrtcHandler && webrtcHandler.p2pRelay) {
+      const status = {
+          isRelay: webrtcHandler.p2pRelay.isRelayNode,
+          bandwidth: webrtcHandler.p2pRelay.bandwidth,
+          maxConnections: webrtcHandler.p2pRelay.maxConnections,
+          currentConnections: webrtcHandler.p2pRelay.relayConnections.size
+      };
+      console.log('P2PRelay Status:', status);
+  }
+}
+
+// Add periodic monitoring
+setInterval(monitorP2PRelayStatus, 60000); // Every minute
 
