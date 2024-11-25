@@ -1203,8 +1203,7 @@
     <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/ipfs-http-client/dist/index.min.js"></script>
-    <!-- <script src="notification-worker.js"></script>
-    <script src="notificationService.js"></script> -->
+    <script src="notification-worker.js"></script>
     <script src="webrtc.js"></script>
     <script>
         // State Management
@@ -1216,37 +1215,6 @@
             dummyStreams: []
         };
 
-        // Initialize
-        // document.addEventListener('DOMContentLoaded', () => {
-        //     renderContacts();
-        //     renderStreams();
-        // });
-
-        // Rendering Functions
-        // function renderContacts() {
-        //     const container = document.getElementById('contactsList');
-        //     container.innerHTML = state.dummyContacts.map(contact => `
-        //         <div class="contact-item" onclick="openChat('${contact.name}')">
-        //             <div class="avatar">${getInitials(contact.name)}</div>
-        //             <div class="contact-info">
-        //                 <div class="contact-name">${contact.name}</div>
-        //                 <div class="contact-status">${contact.status}</div>
-        //             </div>
-        //         </div>
-        //     `).join('');
-        // }
-
-        // function renderStreams() {
-        //     const container = document.querySelector('.streams-grid');
-        //     container.innerHTML = state.dummyStreams.map(stream => `
-        //         <div class="stream-item" onclick="openStreamChat('${stream.name}')">
-        //             <div class="avatar">SA</div>
-        //             <div class="name">${stream.name}</div>
-        //         </div>
-        //     `).join('');
-        // }
-
-        // Navigation Functions
         function switchTab(tab) {
             state.currentView = tab;
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -1267,94 +1235,6 @@
                 openDialog('addStreamDialog');
             }
         }
-
-        // // Chat Functions
-        // function openChat(name) {
-        //     state.currentChat = name;
-        //     state.currentStream = null;
-            
-        //     const chatScreen = document.getElementById('chatScreen');
-        //     const chatTitle = document.getElementById('chatTitle');
-        //     const headerActions = document.querySelector('.header-actions');
-            
-        //     chatTitle.textContent = name;
-        //     headerActions.innerHTML = `
-        //         <button class="action-button" onclick="startVoiceCall()">
-        //             <i class="fas fa-phone"></i>
-        //         </button>
-        //         <button class="action-button" onclick="startVideoCall()">
-        //             <i class="fas fa-video"></i>
-        //         </button>
-        //     `;
-            
-        //     chatScreen.classList.add('show');
-        // }
-
-        // function openStreamChat(name) {
-        //     state.currentStream = name;
-        //     state.currentChat = null;
-            
-        //     const chatScreen = document.getElementById('chatScreen');
-        //     const chatTitle = document.getElementById('chatTitle');
-        //     const headerActions = document.querySelector('.header-actions');
-            
-        //     chatTitle.textContent = name;
-        //     headerActions.innerHTML = `
-        //         <button class="action-button" onclick="openStreamManagement()">
-        //             <i class="fas fa-users"></i>
-        //         </button>
-        //     `;
-            
-        //     chatScreen.classList.add('show');
-        //     loadDummyMessages();
-        // }
-
-        // function goBack() {
-        //     document.getElementById('chatScreen').classList.remove('show');
-        //     state.currentChat = null;
-        //     state.currentStream = null;
-        // }
-
-        // Dialog Management
-        // function openDialog(dialogId) {
-        //     document.getElementById(dialogId).classList.add('show');
-        // }
-
-        // function closeDialog(dialogId) {
-        //     document.getElementById(dialogId).classList.remove('show');
-        // }
-
-        // function showStatus(title, message) {
-        //     document.getElementById('statusTitle').textContent = title;
-        //     document.getElementById('statusMessage').textContent = message;
-        //     openDialog('statusDialog');
-        // }
-
-        // Contact Management
-        // function addContact() {
-        //     const input = document.querySelector('#addContactDialog .dialog-input');
-        //     const username = input.value.trim();
-            
-        //     if (username) {
-        //         closeDialog('addContactDialog');
-        //         showStatus('Invitation sent', `Contact request sent to ${username}`);
-        //         input.value = '';
-        //     }
-        // }
-
-        // Stream Management
-        // function createStream() {
-        //     const input = document.querySelector('#addStreamDialog .dialog-input');
-        //     const streamName = input.value.trim();
-            
-        //     if (streamName) {
-        //         state.dummyStreams.push({ id: Date.now(), name: streamName });
-        //         renderStreams();
-        //         closeDialog('addStreamDialog');
-        //         showStatus('Stream created', 'Stream created successfully');
-        //         input.value = '';
-        //     }
-        // }
 
         function openStreamManagement() {
             const membersList = document.getElementById('streamMembersList');
@@ -1393,58 +1273,6 @@
             // In real app, would remove member from stream
             showStatus('Member Removed', `${name} has been removed from the stream`);
         }
-
-        // Utility Functions
-        // function getInitials(name) {
-        //     return name
-        //         .split(' ')
-        //         .map(word => word[0])
-        //         .join('')
-        //         .toUpperCase();
-        // }
-
-        // function loadDummyMessages() {
-        //     const messages = document.getElementById('messages');
-        //     messages.innerHTML = `
-        //         <div class="message received">How is it going?</div>
-        //         <div class="message sent">How is it going?</div>
-        //         <div class="message received">
-        //             <div>Saurabh kumar sent you one image</div>
-        //             <div class="file-message">
-        //                 <img src="/api/placeholder/100/100" alt="File preview" style="max-width: 100px;">
-        //                 <div class="file-actions">
-        //                     <button class="file-button">Preview</button>
-        //                     <button class="file-button">Download</button>
-        //                 </div>
-        //             </div>
-        //         </div>
-        //     `;
-        // }
-
-        // Message Functions
-        // document.querySelector('.message-input').addEventListener('keypress', (e) => {
-        //     if (e.key === 'Enter') {
-        //         sendMessage();
-        //     }
-        // });
-
-        // document.querySelector('.fa-paper-plane').parentElement.addEventListener('click', sendMessage);
-
-        // function sendMessage() {
-        //     const input = document.querySelector('.message-input');
-        //     const message = input.value.trim();
-            
-        //     if (message) {
-        //         const messages = document.getElementById('messages');
-        //         const messageDiv = document.createElement('div');
-        //         messageDiv.className = 'message sent';
-        //         messageDiv.textContent = message;
-        //         messages.appendChild(messageDiv);
-                
-        //         input.value = '';
-        //         messages.scrollTop = messages.scrollHeight;
-        //     }
-        // }
     </script>
     <script src="app.js"></script>
 </body>
