@@ -235,8 +235,6 @@ async function createStreamElement(groupId, groupData) {
 
   try {
     const { members, memberCount } = await getMembersInfo(groupData);
-    console.log(members)
-    
     const streamElement = document.createElement('div');
     streamElement.className = 'stream-item';
     streamElement.dataset.id = groupId;
@@ -444,7 +442,6 @@ function openStreamManagement() {
       members.forEach((memberId) => {
           const memberItem = document.createElement('div');
           memberItem.className = 'member-item';
-          console.log('memberId', memberId)
           memberItem.innerHTML = `
               <div class="member-avatar">${getInitials(memberId)}</div>
               <div class="member-info">
@@ -543,7 +540,6 @@ function sendMessage() {
 function listenForContactRequests() {
   console.log("I am running");
   user.get('contactRequests').map().on(async (request, requestId) => {
-    console.log(request)
     if (request && request.from && !request.handled) {
       const confirmed = await showCustomConfirm(`${request.from} wants to add you as a contact. Accept?`);
       if (confirmed) {
@@ -710,7 +706,6 @@ function loadGroups() {
       gun.get('groups').get(groupId).once((groupData) => {
           try {
               if (groupData && !streamsGrid.querySelector(`[data-id="${groupId}"]`)) {
-                  console.log('-----',groupData);
                   const streamElement = createStreamElement(groupId, groupData);
                   if (streamElement) {
                       streamsGrid.appendChild(streamElement);
@@ -1190,73 +1185,6 @@ function getFileType(file) {
   if (file.type.startsWith('application/') || file.type.startsWith('text/')) return 'document';
   return 'other';
 }
-
-// async function sendFile() {
-//   const fileInput = document.getElementById('fileInput');
-  
-//   if (!fileInput.files[0]) {
-//     fileInput.click();
-//     await new Promise(resolve => {
-//       fileInput.onchange = () => resolve();
-//     });
-//   }
-  
-//   const file = fileInput.files[0];
-//   if (!file) {
-//     await showCustomAlert('No file selected.');
-//     return;
-//   }
-
-//   const fileType = getFileType(file);
-//   if (fileType === 'other') {
-//     await showCustomAlert('Unsupported file type. Please select an image, video, or document.');
-//     fileInput.value = '';
-//     return;
-//   }
-
-//   try {
-//     // Show expiry dialog
-//     const expiryMinutes = await showExpiryDialog();
-//     //const expiryMinutes = 0;
-//     if (expiryMinutes === null) {
-//       fileInput.value = '';
-//       return;
-//     }
-
-//     // Calculate expiry timestamp
-//     const expiryTime = expiryMinutes === 0 ? Number.MAX_SAFE_INTEGER : Date.now() + (expiryMinutes * 60 * 1000);
-    
-//     // Display preview
-//     displayFilePreview(file, fileType);
-    
-//     // Encrypt and upload
-//     const fileData = await encryptAndUploadFile(file);
-//     const fileInfo = JSON.parse(fileData);
-//     fileInfo.expiryTime = expiryTime;
-//     fileInfo.fileType = fileType;
-    
-//     // Send message
-//     const chatData = {
-//       sender: user.is.alias,
-//       type: 'file',
-//       content: JSON.stringify(fileInfo),
-//       timestamp: Date.now()
-//     };
-
-//     if (currentChatType === 'direct') {
-//       gun.get(`chats`).get(getChatId(user.is.alias, currentChat)).set(chatData);
-//     } else if (currentChatType === 'group') {
-//       gun.get(`groupChats`).get(currentChat).set(chatData);
-//     }
-
-//     console.log('File sent successfully!');
-//     fileInput.value = '';
-//   } catch (error) {
-//     console.error('Error sending file:', error);
-//     fileInput.value = '';
-//     await showCustomAlert('Error sending file. Please try again.');
-//   }
-// }
 
 async function sendFile() {
   const fileInput = document.getElementById('fileInput');
