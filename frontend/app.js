@@ -1,4 +1,4 @@
-const gun = Gun(['https://dcomm.dev.trustgrid.com/gun']);
+const gun = Gun(['http://localhost:3005/gun']);
 const IPFS_BACKEND_URL = 'https://ipfs-backend.uat.trustgrid.com';
 
 // User state
@@ -19,6 +19,11 @@ const processedCandidates = new Set();
 let signalingState = 'stable';
 let processingCall = false;
 let callProcessingTimeout = null;
+let processingSignaling = false;
+
+let isIncomingCall = false;
+let callScreenVisible = false;
+let timerInterval;
 
 // DOM Elements
 const authDiv = document.getElementById('auth');
@@ -27,10 +32,6 @@ const loginBtn = document.getElementById('login');
 const registerBtn = document.getElementById('register');
 const usernameInput = document.getElementById('username');
 const passwordInput = document.getElementById('password');
-const messagesDiv = document.getElementById('messages');
-const messageInput = document.getElementById('messageInput');
-const sendMessageBtn = document.getElementById('sendMessage');
-const contactsList = document.getElementById('contactsList');
 const groupsList = document.getElementById('groupsList');
 const newContactInput = document.getElementById('newContactInput');
 const addContactBtn = document.getElementById('addContact');
@@ -43,9 +44,25 @@ const addToGroupInput = document.getElementById('addToGroupInput');
 const startVoiceCallBtn = document.getElementById('startVoiceCall');
 const endVoiceCallBtn = document.getElementById('endVoiceCall');
 const callControls = document.getElementById('callControls');
-const remoteAudio = document.getElementById('remoteAudio');
 const startVideoCallBtn = document.getElementById("startVideoCall");
 const endCallBtn = document.getElementById('endCall');
+
+const messagesDiv = document.getElementById('messages');
+const messageInput = document.querySelector('.message-input');
+const sendMessageBtn = document.querySelector('.fa-paper-plane').parentElement;
+const contactsList = document.getElementById('contactsList');
+const streamsList = document.getElementById('streamsList');
+const chatScreen = document.getElementById('chatScreen');
+const mainScreen = document.querySelector('.main-screen');
+
+
+// Initialize App
+document.addEventListener('DOMContentLoaded', () => {
+  initializeWebRTC();
+  if (user && user.is) {
+      initializeApp();
+  }
+});
 
 
 async function register(e, loginUser, pass) {
@@ -96,20 +113,392 @@ function login(e, loginUser, pass) {
 }
 
 function loadContacts() {
-  console.log("Loading contacts for", user.is.alias);
   contactsList.innerHTML = '';
   user.get('contacts').map().on((contactData, contactId) => {
-    console.log("Contact data:", contactId, contactData);
-    if (contactData && contactData.alias && !contactsList.querySelector(`[data-id="${contactId}"]`)) {
-      const contactElement = document.createElement('div');
-      contactElement.textContent = contactData.alias;
-      contactElement.dataset.id = contactId;
-      contactElement.classList.add('contact');
-      contactElement.addEventListener('click', () => startChat(contactData.alias));
-      contactsList.appendChild(contactElement);
-    }
+      if (contactData && contactData.alias) {
+          const contactElement = createContactElement(contactData.alias);
+          if (!contactsList.querySelector(`[data-id="${contactId}"]`)) {
+              contactsList.appendChild(contactElement);
+          }
+      }
   });
 }
+
+function createContactElement(alias) {
+  const contactElement = document.createElement('div');
+  contactElement.className = 'contact-item';
+  contactElement.dataset.id = alias;
+  contactElement.innerHTML = `
+      <div class="avatar">${getInitials(alias)}</div>
+      <div class="contact-info">
+          <div class="contact-name">${alias}</div>
+          <div class="contact-status">Available</div>
+      </div>
+  `;
+  contactElement.addEventListener('click', () => openChat(alias));
+  return contactElement;
+}
+
+
+function loadStreams() {
+  const streamsGrid = document.querySelector('.streams-grid');
+  if (!streamsGrid) return;
+  
+  streamsGrid.innerHTML = '';
+  
+  user.get('groups').map().on((groupId) => {
+    if (!groupId) return;
+
+    gun.get('groups').get(groupId).once(async (groupData) => {
+      if (!groupData) return;
+
+      // Check if user is still a member
+      const { members, memberCount } = await getMembersInfo(groupData);
+      if (members.indexOf(user.is.alias) >  -1) {
+        const streamElement = await createStreamElement(groupId, groupData);
+        if (streamElement && !streamsGrid.querySelector(`[data-id="${groupId}"]`)) {
+          streamsGrid.appendChild(streamElement);
+        }
+      }
+    });
+  });
+}
+
+
+async function createStream() {
+  const input = document.querySelector('#addStreamDialog .dialog-input');
+  const streamName = input.value.trim();
+  
+  if (streamName) {
+      const groupId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const groupData = {
+          name: streamName,
+          creator: user.is.alias,
+          members: {[user.is.alias]: true},
+          createdAt: Date.now()
+      };
+      
+      gun.get('groups').get(groupId).put(groupData, (ack) => {
+          if (!ack.err) {
+              user.get('groups').set(groupId);
+              input.value = '';
+              closeDialog('addStreamDialog');
+              showStatus('Success', 'Stream created successfully!');
+              loadStreams();
+          } else {
+              showStatus('Error', 'Failed to create stream.');
+          }
+      });
+  }
+}
+
+
+function getInitials(name) {
+  if (!name) return '?'; // Return fallback for undefined/null names
+  
+  return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase() || '?';
+}
+
+
+function getChatId(user1, user2) {
+  return [user1, user2].sort().join('_');
+}
+
+function getMembersInfo(groupData) {
+  return new Promise(resolve => {
+    const members = [];
+    let memberCount = 0;
+    
+    const groupId = groupData._ && groupData._['#'];
+    if (!groupId) {
+      resolve({ members, memberCount });
+      return;
+    }
+
+    gun.get('groups').get(groupId.split('/')[1]).get('members').map().once((value, key) => {
+      if (value === true) {
+        members.push(key);
+        memberCount++;
+      }
+    });
+
+    setTimeout(() => resolve({ members, memberCount }), 100);
+  });
+}
+
+async function createStreamElement(groupId, groupData) {
+  if (!groupData || !groupData.name) return null;
+
+  try {
+    const { members, memberCount } = await getMembersInfo(groupData);
+    console.log(members)
+    
+    const streamElement = document.createElement('div');
+    streamElement.className = 'stream-item';
+    streamElement.dataset.id = groupId;
+    
+    const name = groupData.name;
+    
+    streamElement.innerHTML = `
+      <div class="avatar">${getInitials(name)}</div>
+      <div class="stream-info">
+          <div class="name">${name}</div>
+          <div class="member-count">${memberCount} member${memberCount !== 1 ? 's' : ''}</div>
+      </div>
+    `;
+
+    streamElement.addEventListener('click', () => openStreamChat(groupId, name));
+    return streamElement;
+  } catch (error) {
+    console.error('Error creating stream element:', error);
+    return null;
+  }
+}
+
+
+function openChat(name) {
+  currentChat = name;
+  currentChatType = 'direct';
+  showChatScreen();
+  
+  const chatTitle = document.getElementById('chatTitle');
+  chatTitle.textContent = name;
+  
+  const headerActions = document.querySelector('.header-actions');
+  headerActions.innerHTML = `<div class="call-buttons">
+        <button class="action-button" onclick="startCall(false)">
+            <i class="fas fa-phone"></i>
+        </button>
+        <button class="action-button" onclick="startCall(true)">
+            <i class="fas fa-video"></i>
+        </button>
+      </div>
+  `;
+  
+  loadMessages(name);
+}
+
+function openStreamChat(groupId, name) {
+  currentChat = groupId;
+  currentChatType = 'group';
+  
+  const chatScreen = document.getElementById('chatScreen');
+  const mainScreen = document.querySelector('.main-screen');
+  
+  mainScreen.style.display = 'none';
+  chatScreen.classList.add('show');
+  
+  // Clear messages before loading new ones
+  const messagesDiv = document.getElementById('messages');
+  messagesDiv.innerHTML = '';
+  
+  // Get fresh group data
+  gun.get('groups').get(groupId).on(async (groupData) => {
+      if (!groupData) return;
+
+      const chatTitle = document.getElementById('chatTitle');
+      const headerActions = document.querySelector('.header-actions');
+      
+      // Get accurate member count
+      const { members, memberCount } = await getMembersInfo(groupData);
+      chatTitle.textContent = `${groupData.name} (${memberCount})`;
+      
+      // Show manage button only if user is admin
+      if (groupData.creator === user.is.alias) {
+          headerActions.innerHTML = `
+              <button class="action-button" onclick="openStreamManagement()">
+                  <i class="fas fa-users"></i>
+              </button>
+          `;
+      } else {
+          headerActions.innerHTML = '';
+      }
+      
+      loadGroupMessages(groupId);
+  });
+}
+
+function updateStreamHeader(streamData) {
+  const memberCount = Object.keys(streamData.members || {}).length;
+  const chatTitle = document.getElementById('chatTitle');
+  chatTitle.textContent = `${streamData.name} (${memberCount} members)`;
+}
+
+
+async function removeMember(memberId) {
+  try {
+      const streamData = await new Promise(resolve => {
+          gun.get('groups').get(currentChat).once(data => resolve(data));
+      });
+
+      if (!streamData || streamData.creator !== user.is.alias) {
+          await showCustomAlert('Only the stream admin can remove members');
+          return;
+      }
+
+      const confirmed = await showCustomConfirm(`Remove ${memberId} from the stream?`);
+      if (!confirmed) return;
+
+      // Remove member from group
+      await new Promise(resolve => {
+          gun.get('groups').get(currentChat).get('members').get(memberId).put(null, resolve);
+      });
+
+      // Remove group from user's groups list
+      await new Promise(resolve => {
+          gun.get('users').get(memberId).get('groups').set({
+              [currentChat]: null
+          }, resolve);
+      });
+
+      // Force update the streams list for the removed user
+      gun.get('users').get(memberId).get('groups').once(() => {
+          loadStreams();
+      });
+
+      await showCustomAlert(`${memberId} has been removed from the stream`);
+      openStreamManagement();
+
+  } catch (error) {
+      console.error('Error removing member:', error);
+      await showCustomAlert('Error removing member. Please try again.');
+  }
+}
+
+async function addMemberToStream() {
+  const input = document.querySelector('#addMemberDialog .dialog-input');
+  const username = input.value.trim();
+  
+  if (!username) return;
+
+  try {
+      // Check if user exists
+      const userExists = await new Promise(resolve => {
+          gun.get('users').get(username).once(userData => {
+              resolve(!!userData);
+          });
+      });
+
+      if (!userExists) {
+          await showCustomAlert('User does not exist');
+          return;
+      }
+
+      // Get stream data to check admin status
+      const streamData = await new Promise(resolve => {
+          gun.get('groups').get(currentChat).once(data => resolve(data));
+      });
+
+      if (!streamData || streamData.creator !== user.is.alias) {
+          await showCustomAlert('Only the stream admin can add members');
+          return;
+      }
+
+      // Check if user is already a member
+      if (streamData.members && streamData.members[username]) {
+          await showCustomAlert('User is already a member of this stream');
+          return;
+      }
+
+      // Add member
+      gun.get('groups').get(currentChat).get('members').get(username).put(true);
+
+      // Send invitation
+      gun.get('users').get(username).get('groupInvitations').set({
+          groupId: currentChat,
+          from: user.is.alias,
+          groupName: streamData.name,
+          timestamp: Date.now()
+      });
+
+      // Close dialogs and show confirmation
+      closeDialog('addMemberDialog');
+      await showCustomAlert(`Invitation sent to ${username}`);
+      
+      // Refresh member list
+      openStreamManagement();
+
+  } catch (error) {
+      console.error('Error adding member:', error);
+      await showCustomAlert('Error adding member. Please try again.');
+  }
+}
+
+function openStreamManagement() {
+  const streamManagementDialog = document.getElementById('streamManagementDialog');
+  const membersList = document.getElementById('streamMembersList');
+  membersList.innerHTML = ''; 
+  
+  gun.get('groups').get(currentChat).on(async (streamData) => {
+    console.log('streamData.creator', streamData.creator);
+      if (!streamData || !streamData.members) return;
+      
+      const isAdmin = streamData.creator === user.is.alias;
+
+      const { members, memberCount } = await getMembersInfo(streamData);
+      membersList.innerHTML = '';
+      members.forEach((memberId) => {
+          const memberItem = document.createElement('div');
+          memberItem.className = 'member-item';
+          console.log('memberId', memberId)
+          memberItem.innerHTML = `
+              <div class="member-avatar">${getInitials(memberId)}</div>
+              <div class="member-info">
+                  <span class="member-name">${memberId}</span>
+                  ${memberId === streamData.creator ? 
+                      '<span class="admin-badge">Admin</span>' : ''}
+              </div>
+              ${isAdmin && memberId !== user.is.alias ? `
+                  <button class="remove-member" onclick="removeMember('${memberId}')">
+                      <i class="fas fa-times"></i>
+                  </button>
+              ` : ''}
+          `;
+          
+          membersList.appendChild(memberItem);
+      });
+
+      const addMemberIcon = document.querySelector('.add-member-icon');
+      if (addMemberIcon) {
+          addMemberIcon.style.display = isAdmin ? 'flex' : 'none';
+      }
+  });
+
+  openDialog('streamManagementDialog');
+}
+
+function showChatScreen() {
+  mainScreen.style.display = 'none';
+  chatScreen.classList.add('show');
+  
+  // Ensure header buttons are properly aligned
+  const headerActions = document.querySelector('.header-actions');
+  if (currentChatType === 'direct') {
+      headerActions.innerHTML = `
+          <div class="call-buttons">
+              <button class="action-button" onclick="startCall(false)">
+                  <i class="fas fa-phone"></i>
+              </button>
+              <button class="action-button" onclick="startCall(true)">
+                  <i class="fas fa-video"></i>
+              </button>
+          </div>
+      `;
+  }
+}
+
+
+function goBack() {
+  mainScreen.style.display = 'block';
+  chatScreen.classList.remove('show');
+  clearChat();
+}
+
+
 
 
 function startChat(contactAlias) {
@@ -129,52 +518,27 @@ function startChat(contactAlias) {
 function sendMessage() {
   const content = messageInput.value.trim();
   if (content && currentChat) {
-    if (typingTimeout) {
-      clearTimeout(typingTimeout);
-    }
-    sendTypingStatus(false);
-    if (currentChatType === 'direct') {
-      const chatId = getChatId(user.is.alias, currentChat);
-      gun.get(`chats`).get(chatId).set({
-        sender: user.is.alias,
-        content: content,
-        timestamp: Date.now(),
-        notified: false
-      });
-    } else if (currentChatType === 'group') {
-      gun.get(`groupChats`).get(currentChat).set({
-        sender: user.is.alias,
-        content: content,
-        timestamp: Date.now(),
-        notified: false
-      });
-    }
-    messageInput.value = '';
-  }
-}
-
-
-function addContact() {
-  const newContact = newContactInput.value.trim();
-  if (newContact && newContact !== user.is.alias) {
-    gun.get('users').get(newContact).once(async (userData) => {
-      console.log("Looking up user:", newContact, "Result:", userData);
-      if (userData && userData.username) {
-        // User exists, send a contact request
-        gun.get('users').get(newContact).get('contactRequests').set({
-          from: user.is.alias,
-          timestamp: Date.now()
-        }, (ack) => {
-          console.log("Contact request sent:", ack);
-        });
-        newContactInput.value = '';
-        await showCustomAlert(`Contact request sent to ${newContact}`);
-      } else {
-        await showCustomAlert(`User ${newContact} does not exist.`);
+      if (typingTimeout) {
+          clearTimeout(typingTimeout);
       }
-    });
+      sendTypingStatus(false);
+
+      const messageData = {
+          sender: user.is.alias,
+          content: content,
+          timestamp: Date.now()
+      };
+
+      if (currentChatType === 'direct') {
+          gun.get(`chats`).get(getChatId(user.is.alias, currentChat)).set(messageData);
+      } else if (currentChatType === 'group') {
+          gun.get(`groupChats`).get(currentChat).set(messageData);
+      }
+      
+      messageInput.value = '';
   }
 }
+
 
 function listenForContactRequests() {
   console.log("I am running");
@@ -205,30 +569,22 @@ function getChatId(user1, user2) {
 }
 
 sendMessageBtn.addEventListener('click', sendMessage);
-addContactBtn.addEventListener('click', addContact);
 
-createGroupBtn.addEventListener('click', createGroup);
-addToGroupBtn.addEventListener('click', addUserToGroup);
-
-window.addEventListener('load', () => {
-  initializeWebRTC()
-  if (user && user.is) {
-    initializeApp();
+messageInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+      sendMessage();
   }
 });
 
+
 function initializeApp() {
-  console.log("Initializing app");
   if (user && user.is) {
-    authDiv.classList.add('hidden');
-    chatDiv.classList.remove('hidden');
-    chatDiv.style.display = "flex";
-    loadContacts();
-    loadGroups();
-    setupContactRequestListener();
-    setupContactAcceptanceListener();
-    setupGroupInvitationListener();
-    setupTypingNotification();
+      loadContacts();
+      loadStreams();
+      setupContactRequestListener();
+      setupContactAcceptanceListener();
+      setupGroupInvitationListener();
+      setupTypingNotification();
   }
 }
 
@@ -245,38 +601,43 @@ function setupContactRequestListener() {
 
 async function handleContactRequest(request, requestId) {
   console.log("Handling contact request:", request, requestId);
-  const confirmed = await showCustomConfirm(`${request.from} wants to add you as a contact. Accept?`);
-  if (confirmed) {
-    // Add the contact for the current user
-    user.get('contacts').get(request.from).put({ alias: request.from }, (ack) => {
-      console.log("Added contact for current user:", ack);
-    });
+  try {
+      const confirmed = await showCustomConfirm(`${request.from} wants to add you as a contact. Accept?`);
+      if (confirmed) {
+          // Add the contact for the current user
+          user.get('contacts').get(request.from).put({ alias: request.from }, (ack) => {
+              console.log("Added contact for current user:", ack);
+          });
 
-    // Add the current user as a contact for the requester
-    gun.get('users').get(request.from).get('contacts').get(user.is.alias).put({ alias: user.is.alias }, (ack) => {
-      console.log("Added current user as contact for requester:", ack);
-    });
-    
-    // Remove the contact request
-    gun.get('users').get(user.is.alias).get('contactRequests').get(requestId).put(null, (ack) => {
-      console.log("Removed contact request:", ack);
-    });
-    
-    // Refresh the contacts list
-    loadContacts();
+          // Add the current user as a contact for the requester
+          gun.get('users').get(request.from).get('contacts').get(user.is.alias).put({ alias: user.is.alias }, (ack) => {
+              console.log("Added current user as contact for requester:", ack);
+          });
+          
+          // Remove the contact request
+          gun.get('users').get(user.is.alias).get('contactRequests').get(requestId).put(null, (ack) => {
+              console.log("Removed contact request:", ack);
+          });
+          
+          // Refresh the contacts list
+          loadContacts();
 
-    // Send acknowledgment to the requester
-    gun.get('users').get(request.from).get('contactAcceptances').set({
-      from: user.is.alias,
-      timestamp: Date.now()
-    });
+          // Send acknowledgment to the requester
+          gun.get('users').get(request.from).get('contactAcceptances').set({
+              from: user.is.alias,
+              timestamp: Date.now()
+          });
 
-    await showCustomAlert(`You are now connected with ${request.from}`);
-  } else {
-    // If rejected, remove the request instead of marking it as handled
-    gun.get('users').get(user.is.alias).get('contactRequests').get(requestId).put(null, (ack) => {
-      console.log("Removed rejected contact request:", ack);
-    });
+          await showCustomAlert(`You are now connected with ${request.from}`);
+      } else {
+          // If rejected, remove the request
+          gun.get('users').get(user.is.alias).get('contactRequests').get(requestId).put(null, (ack) => {
+              console.log("Removed rejected contact request:", ack);
+          });
+      }
+  } catch (error) {
+      console.error("Error handling contact request:", error);
+      await showCustomAlert("Error processing contact request. Please try again.");
   }
 }
 
@@ -303,44 +664,62 @@ function setupContactAcceptanceListener() {
 }
 
 function createGroup() {
-  const groupName = newGroupNameInput.value.trim();
-  if (groupName) {
-    const groupId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const groupData = {
+  const groupName = document.querySelector('#addStreamDialog .dialog-input').value.trim();
+  if (!groupName) return;
+
+  const groupId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const groupData = {
       name: groupName,
       creator: user.is.alias,
-      members: {[user.is.alias]: true},  // Using an object instead of an array
+      members: {},
       createdAt: Date.now()
-    };
-    
-    gun.get('groups').get(groupId).put(groupData, async (ack) => {
+  };
+  
+  // Add creator as first member
+  groupData.members[user.is.alias] = true;
+
+  gun.get('groups').get(groupId).put(groupData, async (ack) => {
       if (ack.err) {
-        await showCustomAlert('Error creating stream: ' + ack.err);
-      } else {
-        user.get('groups').set(groupId);
-        newGroupNameInput.value = '';
-        loadGroups();
-        await showCustomAlert('Stream created successfully!');
+          await showCustomAlert('Error creating stream: ' + ack.err);
+          return;
       }
-    });
-  }
+
+      // Add group to creator's groups
+      user.get('groups').set(groupId);
+      
+      closeDialog('addStreamDialog');
+      document.querySelector('#addStreamDialog .dialog-input').value = '';
+      
+      await showCustomAlert('Stream created successfully!');
+      loadGroups(); // Refresh streams list
+  });
 }
 
 function loadGroups() {
-  groupsList.innerHTML = '';
+  const streamsGrid = document.querySelector('.streams-grid');
+  if (!streamsGrid) {
+      console.error('Streams grid element not found');
+      return;
+  }
+  
+  streamsGrid.innerHTML = '';
+  
   user.get('groups').map().on((groupId) => {
-    if (groupId) {
+      if (!groupId) return;
+
       gun.get('groups').get(groupId).once((groupData) => {
-        if (groupData && groupData.name && !groupsList.querySelector(`[data-id="${groupId}"]`)) {
-          const groupElement = document.createElement('div');
-          groupElement.textContent = groupData.name;
-          groupElement.dataset.id = groupId;
-          groupElement.classList.add('group');
-          groupElement.addEventListener('click', () => startGroupChat(groupId, groupData.name));
-          groupsList.appendChild(groupElement);
-        }
+          try {
+              if (groupData && !streamsGrid.querySelector(`[data-id="${groupId}"]`)) {
+                  console.log('-----',groupData);
+                  const streamElement = createStreamElement(groupId, groupData);
+                  if (streamElement) {
+                      streamsGrid.appendChild(streamElement);
+                  }
+              }
+          } catch (error) {
+              console.error('Error creating stream element:', error);
+          }
       });
-    }
   });
 }
 
@@ -393,91 +772,149 @@ async function addUserToGroup() {
 
 function setupGroupInvitationListener() {
   gun.get('users').get(user.is.alias).get('groupInvitations').map().on(async (invitation, invitationId) => {
-    if (invitation && !invitation.handled) {
-      const accepted = await showCustomConfirm(`${invitation.from} invited you to join the stream "${invitation.groupName}". Accept?`);
-      if (accepted) {
-        user.get('groups').set(invitation.groupId);
-        gun.get('groups').get(invitation.groupId).get('members').get(user.is.alias).put(true);
-        loadGroups();
-        
-        // Remove the invitation after accepting
-        gun.get('users').get(user.is.alias).get('groupInvitations').get(invitationId).put(null, (ack) => {
-          console.log("Removed accepted stream invitation:", ack);
-        });
-      } else {
-        // Remove the invitation if rejected
-        gun.get('users').get(user.is.alias).get('groupInvitations').get(invitationId).put(null, (ack) => {
-          console.log("Removed rejected stream invitation:", ack);
-        });
+      if (invitation && !invitation.handled) {
+          const accepted = await showCustomConfirm(
+              `${invitation.from} invited you to join the stream "${invitation.groupName}". Accept?`
+          );
+          
+          if (accepted) {
+              user.get('groups').set(invitation.groupId);
+              gun.get('groups').get(invitation.groupId).get('members').get(user.is.alias).put(true);
+              
+              // Remove the invitation after accepting
+              gun.get('users').get(user.is.alias).get('groupInvitations').get(invitationId).put(null);
+              
+              // Refresh streams grid
+              loadGroups();
+              await showCustomAlert(`You've been added to ${invitation.groupName}`);
+          } else {
+              // Remove the invitation if rejected
+              gun.get('users').get(user.is.alias).get('groupInvitations').get(invitationId).put(null);
+          }
       }
-    }
   });
 }
 
 async function endCall() {
-  if (callProcessingTimeout) {
-    clearTimeout(callProcessingTimeout);
-    callProcessingTimeout = null;
-  }
-
   if (currentCall) {
-    await new Promise((resolve) => {
-      gun.get('calls').get(currentCall.id).put({
-        type: 'end',
-        from: user.is.alias,
-        to: currentCall.to,
-        endTime: Date.now(),
-        status: 'ended'
-      }, resolve);
-    });
+      await new Promise((resolve) => {
+          gun.get('calls').get(currentCall.id).put({
+              type: 'end',
+              from: user.is.alias,
+              to: currentCall.to,
+              endTime: Date.now(),
+              status: 'ended'
+          }, resolve);
+      });
   }
 
-  if (peerConnection) {
-    try {
-      peerConnection.close();
-    } catch (error) {
-      console.error('Error closing peer connection:', error);
-    }
-    peerConnection = null;
+  // Stop timer
+  if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
   }
 
+  // Clean up media streams
   if (localStream) {
-    try {
-      localStream.getTracks().forEach(track => track.stop());
-    } catch (error) {
-      console.error('Error stopping local stream:', error);
-    }
-    localStream = null;
+      localStream.getTracks().forEach(track => {
+          track.stop();
+      });
+      localStream = null;
   }
 
-  // Reset UI elements
-  const remoteAudio = document.getElementById('remoteAudio');
+  // Close peer connection
+  if (peerConnection) {
+      try {
+          peerConnection.close();
+      } catch (error) {
+          console.error('Error closing peer connection:', error);
+      }
+      peerConnection = null;
+  }
+
+  // Remove call screen
+  const callScreen = document.getElementById('callScreen');
+  if (callScreen) {
+      callScreen.remove();
+      callScreenVisible = false;
+  }
+
   const remoteVideo = document.getElementById('remoteVideo');
   const localVideo = document.getElementById('localVideo');
-  
-  if (remoteAudio) remoteAudio.srcObject = null;
   if (remoteVideo) remoteVideo.srcObject = null;
   if (localVideo) localVideo.srcObject = null;
-  
-  document.getElementById('videoContainer').classList.add('hidden');
-  updateCallUI(false);
 
-  // Reset state
+  // Reset all states
   currentCall = null;
   isCallInProgress = false;
   isVideoCall = false;
-  signalingState = 'stable';
-  processingCall = false;
+  isIncomingCall = false;
+}
+
+
+function handleTrack(event) {
+  console.log('Received remote track:', event.track.kind);
+  
+  if (event.track.kind === 'audio') {
+      // Create audio element if it doesn't exist
+      let remoteAudio = document.getElementById('remoteAudio');
+      if (!remoteAudio) {
+          remoteAudio = document.createElement('audio');
+          remoteAudio.id = 'remoteAudio';
+          remoteAudio.autoplay = true;
+          document.body.appendChild(remoteAudio);
+      }
+      remoteAudio.srcObject = event.streams[0];
+  } 
+  
+  if (event.track.kind === 'video') {
+      const remoteVideo = document.getElementById('remoteVideo');
+      if (remoteVideo) {
+          console.log('Setting remote video stream');
+          remoteVideo.srcObject = event.streams[0];
+          
+          // Ensure the video is visible
+          const videoContainer = document.querySelector('.video-content');
+          if (videoContainer) {
+              videoContainer.style.display = 'block';
+          }
+
+          // Log video track status
+          event.track.onmute = () => console.log('Remote video track muted');
+          event.track.onunmute = () => console.log('Remote video track unmuted');
+          event.track.onended = () => console.log('Remote video track ended');
+
+          // Monitor video element status
+          remoteVideo.onloadedmetadata = () => console.log('Remote video metadata loaded');
+          remoteVideo.onplay = () => console.log('Remote video playing');
+          remoteVideo.onpause = () => console.log('Remote video paused');
+          remoteVideo.onerror = (e) => console.error('Remote video error:', e);
+      } else {
+          console.error('Remote video element not found');
+      }
+  }
+}
+
+
+async function rejectCall(data, reason) {
+  if (data && data.callId) {
+      await new Promise((resolve) => {
+          gun.get('calls').get(data.callId).put({
+              type: 'end',
+              from: user.is.alias,
+              to: data.from,
+              endTime: Date.now(),
+              status: 'rejected',
+              reason: reason
+          }, resolve);
+      });
+  }
 }
 
 function initializeWebRTC() {
   webrtcHandler = new WebRTCHandler(
     handleICECandidate,
     handleTrack
-    // (event) => {
-    //   console.log('Received remote track:', event.track.kind);
-    //   remoteAudio.srcObject = event.streams[0];
-    // }
   );
 }
 
@@ -496,32 +933,40 @@ function sendIceCandidate(callId, candidate) {
   });
 }
 
+
 gun.on('auth', () => {
-  console.log('User authenticated:', user.is.alias);
   gun.get(`calls`).map().on(async (data, key) => {
-    if (!data || !data.to || data.to !== user.is.alias) return;
-    
-    // console.log('Received call data:', data);
-    
-    if (data.type === 'ice') {
-      handleIncomingIceCandidate(key, data);
-    } else if (data.type === 'offer') {
-      handleIncomingCall(data);
-    } else if (data.type === 'answer' && peerConnection) {
+      if (!data || !data.to || data.to !== user.is.alias) return;
+      
       try {
-        await peerConnection.setRemoteDescription(new RTCSessionDescription({
-          type: data.answerType,
-          sdp: data.answerSdp
-        }));
+          if (data.type === 'end') {
+              endCall();
+          } else if (data.type === 'ice' && peerConnection) {
+              handleIncomingIceCandidate(key, data);
+          } else if (data.type === 'offer' && !isCallInProgress && !isIncomingCall) {
+              handleIncomingCall(data);
+          } else if (data.type === 'answer' && peerConnection && !processingSignaling) {
+              processingSignaling = true;
+              try {
+                  if (peerConnection.signalingState === 'have-local-offer') {
+                      await peerConnection.setRemoteDescription(new RTCSessionDescription({
+                          type: data.answerType,
+                          sdp: data.answerSdp
+                      }));
+                      //startTimer();
+                  }
+              } catch (error) {
+                  console.error('Error setting remote description:', error);
+              } finally {
+                  processingSignaling = false;
+              }
+          }
       } catch (error) {
-        console.error('Error setting remote description:', error);
+          console.error('Error processing call event:', error);
+          processingSignaling = false;
       }
-    } else if (data.type === 'end') {
-      endCall();
-    }
   });
 });
-
 
 function handleIncomingIceCandidate(callId, data) {
   if (data && data.ice) {
@@ -649,34 +1094,93 @@ async function encryptAndUploadFile(file) {
   return JSON.stringify(data);
 }
 
-async function showExpiryDialog() {
-  const dialogHtml = `
-    <div class="dialog-content">
-      <p>Set file expiration time (in minutes)</p>
-      <p>Enter 0 for no expiration</p>
-      <input type="number" min="0" id="expiryInput" class="input-box-style" value="0">
-      <div class="dialog-buttons">
-        <button class="primary-button-style" id="confirmExpiry">Confirm</button>
-        <button class="primary-button-style" id="cancelExpiry">Cancel</button>
-      </div>
-    </div>
-  `;
+// async function showExpiryDialog() {
+//   const dialogHtml = `
+//     <div class="dialog-content">
+//       <p>Set file expiration time (in minutes)</p>
+//       <p>Enter 0 for no expiration</p>
+//       <input type="number" min="0" id="expiryInput" class="input-box-style" value="0">
+//       <div class="dialog-buttons">
+//         <button class="primary-button-style" id="confirmExpiry">Confirm</button>
+//         <button class="primary-button-style" id="cancelExpiry">Cancel</button>
+//       </div>
+//     </div>
+//   `;
 
-  const dialog = document.createElement('div');
-  dialog.className = 'custom-dialog';
-  dialog.innerHTML = dialogHtml;
-  document.body.appendChild(dialog);
+//   const dialog = document.createElement('div');
+//   dialog.className = 'custom-dialog';
+//   dialog.innerHTML = dialogHtml;
+//   document.body.appendChild(dialog);
 
+//   return new Promise((resolve) => {
+//     document.getElementById('confirmExpiry').onclick = () => {
+//       const minutes = parseInt(document.getElementById('expiryInput').value) || 0;
+//       document.body.removeChild(dialog);
+//       resolve(minutes);
+//     };
+//     document.getElementById('cancelExpiry').onclick = () => {
+//       document.body.removeChild(dialog);
+//       resolve(null);
+//     };
+//   });
+// }
+
+function showExpiryDialog() {
   return new Promise((resolve) => {
-    document.getElementById('confirmExpiry').onclick = () => {
-      const minutes = parseInt(document.getElementById('expiryInput').value) || 0;
-      document.body.removeChild(dialog);
-      resolve(minutes);
-    };
-    document.getElementById('cancelExpiry').onclick = () => {
-      document.body.removeChild(dialog);
-      resolve(null);
-    };
+      const overlay = document.createElement('div');
+      overlay.className = 'expiry-overlay';
+
+      const dialog = document.createElement('div');
+      dialog.className = 'expiry-dialog';
+      dialog.innerHTML = `
+          <h3>Set File Expiry Time</h3>
+          <div class="expiry-hint">Set how long the file will be available</div>
+          <input type="number" min="0" 
+                 class="expiry-input" 
+                 placeholder="Enter minutes (0 for no expiry)"
+                 id="expiryInput">
+          <div class="expiry-buttons">
+              <button class="expiry-button cancel" id="cancelExpiry">Cancel</button>
+              <button class="expiry-button confirm" id="confirmExpiry">Confirm</button>
+          </div>
+      `;
+
+      document.body.appendChild(overlay);
+      document.body.appendChild(dialog);
+
+      const input = dialog.querySelector('#expiryInput');
+      input.focus();
+
+      function cleanup() {
+          document.body.removeChild(overlay);
+          document.body.removeChild(dialog);
+      }
+
+      dialog.querySelector('#confirmExpiry').onclick = () => {
+          const minutes = parseInt(input.value) || 0;
+          cleanup();
+          resolve(minutes);
+      };
+
+      dialog.querySelector('#cancelExpiry').onclick = () => {
+          cleanup();
+          resolve(null);
+      };
+
+      input.onkeypress = (e) => {
+          if (e.key === 'Enter') {
+              const minutes = parseInt(input.value) || 0;
+              cleanup();
+              resolve(minutes);
+          }
+      };
+
+      overlay.onclick = (e) => {
+          if (e.target === overlay) {
+              cleanup();
+              resolve(null);
+          }
+      };
   });
 }
 
@@ -687,70 +1191,150 @@ function getFileType(file) {
   return 'other';
 }
 
+// async function sendFile() {
+//   const fileInput = document.getElementById('fileInput');
+  
+//   if (!fileInput.files[0]) {
+//     fileInput.click();
+//     await new Promise(resolve => {
+//       fileInput.onchange = () => resolve();
+//     });
+//   }
+  
+//   const file = fileInput.files[0];
+//   if (!file) {
+//     await showCustomAlert('No file selected.');
+//     return;
+//   }
+
+//   const fileType = getFileType(file);
+//   if (fileType === 'other') {
+//     await showCustomAlert('Unsupported file type. Please select an image, video, or document.');
+//     fileInput.value = '';
+//     return;
+//   }
+
+//   try {
+//     // Show expiry dialog
+//     const expiryMinutes = await showExpiryDialog();
+//     //const expiryMinutes = 0;
+//     if (expiryMinutes === null) {
+//       fileInput.value = '';
+//       return;
+//     }
+
+//     // Calculate expiry timestamp
+//     const expiryTime = expiryMinutes === 0 ? Number.MAX_SAFE_INTEGER : Date.now() + (expiryMinutes * 60 * 1000);
+    
+//     // Display preview
+//     displayFilePreview(file, fileType);
+    
+//     // Encrypt and upload
+//     const fileData = await encryptAndUploadFile(file);
+//     const fileInfo = JSON.parse(fileData);
+//     fileInfo.expiryTime = expiryTime;
+//     fileInfo.fileType = fileType;
+    
+//     // Send message
+//     const chatData = {
+//       sender: user.is.alias,
+//       type: 'file',
+//       content: JSON.stringify(fileInfo),
+//       timestamp: Date.now()
+//     };
+
+//     if (currentChatType === 'direct') {
+//       gun.get(`chats`).get(getChatId(user.is.alias, currentChat)).set(chatData);
+//     } else if (currentChatType === 'group') {
+//       gun.get(`groupChats`).get(currentChat).set(chatData);
+//     }
+
+//     console.log('File sent successfully!');
+//     fileInput.value = '';
+//   } catch (error) {
+//     console.error('Error sending file:', error);
+//     fileInput.value = '';
+//     await showCustomAlert('Error sending file. Please try again.');
+//   }
+// }
+
 async function sendFile() {
   const fileInput = document.getElementById('fileInput');
   
   if (!fileInput.files[0]) {
-    fileInput.click();
-    await new Promise(resolve => {
-      fileInput.onchange = () => resolve();
-    });
+      fileInput.click();
+      await new Promise(resolve => {
+          fileInput.onchange = () => resolve();
+      });
   }
   
   const file = fileInput.files[0];
   if (!file) {
-    await showCustomAlert('No file selected.');
-    return;
+      await showCustomAlert('No file selected.');
+      return;
   }
 
   const fileType = getFileType(file);
   if (fileType === 'other') {
-    await showCustomAlert('Unsupported file type. Please select an image, video, or document.');
-    fileInput.value = '';
-    return;
+      await showCustomAlert('Unsupported file type. Please select an image, video, or document.');
+      fileInput.value = '';
+      return;
   }
 
   try {
-    // Show expiry dialog
-    const expiryMinutes = await showExpiryDialog();
-    //const expiryMinutes = 0;
-    if (expiryMinutes === null) {
+      // Show expiry dialog
+      const expiryMinutes = await showExpiryDialog();
+      if (expiryMinutes === null) {
+          fileInput.value = '';
+          return;
+      }
+
+      // Calculate expiry timestamp
+      const expiryTime = expiryMinutes === 0 ? 
+          Number.MAX_SAFE_INTEGER : 
+          Date.now() + (expiryMinutes * 60 * 1000);
+
+      // Create temporary preview message
+      const tempMessage = document.createElement('div');
+      tempMessage.className = 'message file-preview sent';
+      tempMessage.innerHTML = `
+          <div>Sending ${file.name}...</div>
+          <div class="loading-spinner"></div>
+      `;
+      messagesDiv.appendChild(tempMessage);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+      // Display preview
+      await displayFilePreview(file, fileType, false, tempMessage);
+      
+      // Encrypt and upload
+      const fileData = await encryptAndUploadFile(file);
+      const fileInfo = JSON.parse(fileData);
+      fileInfo.expiryTime = expiryTime;
+      fileInfo.fileType = fileType;
+      
+      // Send message
+      const chatData = {
+          sender: user.is.alias,
+          type: 'file',
+          content: JSON.stringify(fileInfo),
+          timestamp: Date.now()
+      };
+
+      if (currentChatType === 'direct') {
+          gun.get(`chats`).get(getChatId(user.is.alias, currentChat)).set(chatData);
+      } else if (currentChatType === 'group') {
+          gun.get(`groupChats`).get(currentChat).set(chatData);
+      }
+
+      // Remove temporary message
+      tempMessage.remove();
+      
       fileInput.value = '';
-      return;
-    }
-
-    // Calculate expiry timestamp
-    const expiryTime = expiryMinutes === 0 ? Number.MAX_SAFE_INTEGER : Date.now() + (expiryMinutes * 60 * 1000);
-    
-    // Display preview
-    displayFilePreview(file, fileType);
-    
-    // Encrypt and upload
-    const fileData = await encryptAndUploadFile(file);
-    const fileInfo = JSON.parse(fileData);
-    fileInfo.expiryTime = expiryTime;
-    fileInfo.fileType = fileType;
-    
-    // Send message
-    const chatData = {
-      sender: user.is.alias,
-      type: 'file',
-      content: JSON.stringify(fileInfo),
-      timestamp: Date.now()
-    };
-
-    if (currentChatType === 'direct') {
-      gun.get(`chats`).get(getChatId(user.is.alias, currentChat)).set(chatData);
-    } else if (currentChatType === 'group') {
-      gun.get(`groupChats`).get(currentChat).set(chatData);
-    }
-
-    console.log('File sent successfully!');
-    fileInput.value = '';
   } catch (error) {
-    console.error('Error sending file:', error);
-    fileInput.value = '';
-    await showCustomAlert('Error sending file. Please try again.');
+      console.error('Error sending file:', error);
+      fileInput.value = '';
+      await showCustomAlert('Error sending file. Please try again.');
   }
 }
 
@@ -854,55 +1438,219 @@ async function deleteFileFromIPFS(cid) {
   }
 }
 
+
 function loadMessages(contactAlias) {
   const chatId = getChatId(user.is.alias, contactAlias);
   gun.get(`chats`).get(chatId).map().on((message, id) => {
-    displayMessage(message, id);
+      displayMessage(message, id);
   });
 }
 
+
+
 function loadGroupMessages(groupId) {
-  gun.get(`groupChats`).get(groupId).map().on((message, id) => {
-    displayMessage(message, id);
+  const messagesDiv = document.getElementById('messages');
+  
+  gun.get(`groupChats`).get(groupId).map().once((message, id) => {
+      if (!message || messagesDiv.querySelector(`[data-id="${id}"]`)) return;
+
+      displayMessage(message, id);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
   });
 }
 
 function displayMessage(message, id) {
-  if (message && !messagesDiv.querySelector(`[data-id="${id}"]`)) {
-    const messageElement = document.createElement('div');
-    if (message.type === 'file' && message.content) {
+  if (!message || messagesDiv.querySelector(`[data-id="${id}"]`)) return;
+
+  const messageElement = document.createElement('div');
+  messageElement.dataset.id = id;
+  messageElement.className = `message ${message.sender === user.is.alias ? 'sent' : 'received'}`;
+
+  if (message.type === 'file') {
       try {
-        const fileInfo = JSON.parse(message.content);
-        const isExpired = fileInfo.expiryTime && fileInfo.expiryTime < Date.now();
-        
-        messageElement.textContent = `${message.sender} sent a ${fileInfo.fileType}: ${fileInfo.fileName}`;
-        
-        if (!isExpired) {
-          const downloadButton = document.createElement('button');
-          downloadButton.textContent = 'Download';
-          downloadButton.className = 'primary-button-style';
-          downloadButton.addEventListener('click', () => receiveAndDecryptFile(message.content));
-          messageElement.appendChild(downloadButton);
-        } else {
-          const expiredText = document.createElement('span');
-          expiredText.textContent = ' (Expired)';
-          expiredText.style.color = '#ff4444';
-          messageElement.appendChild(expiredText);
-        }
+          const fileInfo = JSON.parse(message.content);
+          const isExpired = fileInfo.expiryTime && fileInfo.expiryTime < Date.now();
+          
+          messageElement.innerHTML = `
+              <div class="file-message">
+                  ${message.sender}: ${isExpired ? 'File has expired' : `Sent a ${fileInfo.fileType}`}
+                  <div class="file-info">
+                      <i class="fas ${getFileIcon(fileInfo.fileType)}"></i>
+                      <span>${fileInfo.fileName}</span>
+                  </div>
+                  ${!isExpired ? `
+                      <div class="file-actions">
+                          <button class="file-button" onclick="handleFileDownload('${encodeURIComponent(JSON.stringify(fileInfo))}')">
+                              Download
+                          </button>
+                      </div>
+                  ` : ''}
+              </div>
+          `;
       } catch (err) {
-        console.error('Error parsing file content:', err);
-        messageElement.textContent = `${message.sender}: Error displaying file`;
+          console.error('Error displaying file message:', err);
+          messageElement.textContent = `${message.sender}: Error displaying file`;
       }
-    } else {
+  } else {
       messageElement.textContent = `${message.sender}: ${message.content}`;
-    }
-    
-    messageElement.dataset.id = id;
-    messageElement.classList.add('message', message.sender === user.is.alias ? 'sent' : 'received');
-    messagesDiv.appendChild(messageElement);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  }
+
+  messagesDiv.appendChild(messageElement);
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function getFileIcon(fileType) {
+  switch (fileType) {
+      case 'image':
+          return 'fa-image';
+      case 'video':
+          return 'fa-video';
+      case 'document':
+          return 'fa-file-alt';
+      default:
+          return 'fa-file';
   }
 }
+
+async function handleFileDownload(encodedFileInfo) {
+  try {
+      const fileInfo = JSON.parse(decodeURIComponent(encodedFileInfo));
+      
+      // Check expiry
+      if (fileInfo.expiryTime && fileInfo.expiryTime < Date.now()) {
+          await showCustomAlert('This file has expired and is no longer available.');
+          return;
+      }
+
+      // Show loading state
+      const downloadBtn = event.target;
+      const originalText = downloadBtn.textContent;
+      downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Downloading...';
+      downloadBtn.disabled = true;
+
+      // Get file from IPFS
+      const response = await fetch(`${IPFS_BACKEND_URL}/getFile`, {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ cid: fileInfo.cid })
+      });
+
+      if (!response.ok) {
+          throw new Error(`Failed to fetch file: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      const fileUrl = result.result;
+      const encryptedFileResponse = await fetch(fileUrl);
+      
+      if (!encryptedFileResponse.ok) {
+          throw new Error(`Failed to download file: ${encryptedFileResponse.statusText}`);
+      }
+
+      // Handle download progress
+      const totalSize = parseInt(encryptedFileResponse.headers.get('Content-Length') || '0');
+      let downloadedSize = 0;
+      const chunks = [];
+      const reader = encryptedFileResponse.body.getReader();
+
+      while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          downloadedSize += value.length;
+
+          // Update progress
+          if (totalSize) {
+              const progress = Math.round((downloadedSize / totalSize) * 100);
+              downloadBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${progress}%`;
+          }
+      }
+
+      // Combine chunks and decrypt
+      const encryptedFile = new Uint8Array(downloadedSize);
+      let position = 0;
+      for (const chunk of chunks) {
+          encryptedFile.set(chunk, position);
+          position += chunk.length;
+      }
+
+      const symKey = await crypto.subtle.importKey(
+          "raw",
+          base64ToArrayBuffer(fileInfo.encryptedSymKey),
+          { name: "AES-GCM", length: 256 },
+          false,
+          ["decrypt"]
+      );
+
+      const decryptedFile = await crypto.subtle.decrypt(
+          { name: "AES-GCM", iv: base64ToArrayBuffer(fileInfo.iv) },
+          symKey,
+          encryptedFile
+      );
+
+      // Create and download file
+      const blob = new Blob([decryptedFile], { type: fileInfo.fileType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileInfo.fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // Reset button
+      downloadBtn.innerHTML = originalText;
+      downloadBtn.disabled = false;
+
+  } catch (error) {
+      console.error('Error downloading file:', error);
+      await showCustomAlert('Error downloading file. Please try again.');
+      event.target.innerHTML = originalText;
+      event.target.disabled = false;
+  }
+}
+
+function openDialog(dialogId) {
+  document.getElementById(dialogId).classList.add('show');
+}
+
+function closeDialog(dialogId) {
+  document.getElementById(dialogId).classList.remove('show');
+}
+
+
+function showStatus(title, message) {
+  document.getElementById('statusTitle').textContent = title;
+  document.getElementById('statusMessage').textContent = message;
+  openDialog('statusDialog');
+}
+
+
+async function addContact() {
+  const input = document.querySelector('#addContactDialog .dialog-input');
+  const newContact = input.value.trim();
+  
+  if (newContact && newContact !== user.is.alias) {
+      gun.get('users').get(newContact).once(async (userData) => {
+          if (userData && userData.username) {
+              gun.get('users').get(newContact).get('contactRequests').set({
+                  from: user.is.alias,
+                  timestamp: Date.now()
+              });
+              input.value = '';
+              closeDialog('addContactDialog');
+              showStatus('Request Sent', `Contact request sent to ${newContact}`);
+          } else {
+              showStatus('Error', `User ${newContact} does not exist.`);
+          }
+      });
+  }
+}
+
+
 
 function arrayBufferToBase64(buffer) {
   let binary = '';
@@ -934,15 +1682,6 @@ function displayImage(blob) {
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
-function handleTrack(event) {
-  console.log('Received remote track:', event.track.kind);
-  if (event.track.kind === 'audio') {
-    remoteAudio.srcObject = event.streams[0];
-  } else if (event.track.kind === 'video') {
-    const remoteVideo = document.getElementById('remoteVideo');
-    remoteVideo.srcObject = event.streams[0];
-  }
-}
 
 function displayFilePreview(blob, fileType, received=false) {
   const url = URL.createObjectURL(blob);
@@ -982,119 +1721,130 @@ function displayFilePreview(blob, fileType, received=false) {
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
+function ensureTypingContainer() {
+    let typingContainer = document.getElementById('typingContainer');
+    if (!typingContainer) {
+        typingContainer = document.createElement('div');
+        typingContainer.id = 'typingContainer';
+        typingContainer.className = 'typing-container';
+        document.getElementById('messages').appendChild(typingContainer);
+    }
+}
+
 document.getElementById('sendFile').addEventListener('click', sendFile);
 
-startVoiceCallBtn.addEventListener('click', () => startCall(false));
-document.getElementById('startVideoCall').addEventListener('click', () => startCall(true));
-document.getElementById('endCall').addEventListener('click', endCall);
+function handleTypingEvent() {
+  if (typingTimeout) clearTimeout(typingTimeout);
+  
+  sendTypingStatus(true);
+  
+  typingTimeout = setTimeout(() => {
+    sendTypingStatus(false);
+  }, TYPING_TIMEOUT);
+}
 
 function setupTypingNotification() {
+  ensureTypingContainer();
+  
   messageInput.addEventListener('input', handleTypingEvent);
   messageInput.addEventListener('blur', () => {
-    if (typingTimeout) clearTimeout(typingTimeout);
-    sendTypingStatus(false);
+      if (typingTimeout) clearTimeout(typingTimeout);
+      sendTypingStatus(false);
   });
   listenForTypingNotifications();
 }
 
-function handleTypingEvent() {
-  if (!currentChat || !messageInput.value.trim()) {
-    sendTypingStatus(false);
-    return;
-  }
-  if (typingTimeout) clearTimeout(typingTimeout);
-  typingTimeout = setTimeout(() => {
-    sendTypingStatus(false);
-  }, TYPING_TIMEOUT);
-  sendTypingStatus(true);
-}
 
 function sendTypingStatus(isTyping) {
   if (!currentChat || !user) return;
 
   const typingData = {
-    user: user.is.alias,
-    isTyping: isTyping,
-    timestamp: Date.now()
+      user: user.is.alias,
+      isTyping: isTyping,
+      timestamp: Date.now()
   };
 
   if (currentChatType === 'direct') {
-    gun.get('typing').get(getChatId(user.is.alias, currentChat)).put(typingData);
+      gun.get('typing').get(getChatId(user.is.alias, currentChat)).put(typingData);
   } else if (currentChatType === 'group') {
-    gun.get('groupTyping').get(currentChat).get(user.is.alias).put(typingData);
+      gun.get('streamTyping').get(currentChat).get(user.is.alias).put(typingData);
   }
 }
 
 function listenForTypingNotifications() {
   // For direct chats
   gun.get('typing').map().on((data, chatId) => {
-    if (!data || !data.user || data.user === user.is.alias) return;
+      if (!data || !data.user || data.user === user.is.alias) return;
 
-    // Only show typing indicator if it's for the current chat
-    if (currentChatType === 'direct' && 
-        chatId === getChatId(user.is.alias, currentChat)) {
-      updateTypingIndicator(data.user, data.isTyping);
-    }
+      if (currentChatType === 'direct' && 
+          chatId === getChatId(user.is.alias, currentChat)) {
+          updateTypingIndicator(data.user, data.isTyping);
+      }
   });
 
-  // For group chats
-  gun.get('groupTyping').map().on((groupData, groupId) => {
-    if (currentChatType === 'group' && groupId === currentChat) {
-      gun.get('groupTyping').get(groupId).map().on((data) => {
-        if (!data || !data.user || data.user === user.is.alias) return;
-        updateTypingIndicator(data.user, data.isTyping);
-      });
-    }
+  // For streams
+  gun.get('streamTyping').map().on((streamData, streamId) => {
+      if (currentChatType === 'group' && streamId === currentChat) {
+          gun.get('streamTyping').get(streamId).map().on((data) => {
+              if (!data || !data.user || data.user === user.is.alias) return;
+              updateTypingIndicator(data.user, data.isTyping);
+          });
+      }
   });
 }
 
 function updateTypingIndicator(username, isTyping) {
+  const typingContainer = document.getElementById('typingContainer');
+  if (!typingContainer) return;
+
   const typingIndicatorId = `typing-${username}`;
   let typingIndicator = document.getElementById(typingIndicatorId);
 
   if (isTyping) {
-    if (!typingIndicator) {
-      typingIndicator = document.createElement('div');
-      typingIndicator.id = typingIndicatorId;
-      typingIndicator.className = 'typing-indicator';
-      
-      const dotContainer = document.createElement('div');
-      dotContainer.className = 'typing-dots';
-      for (let i = 0; i < 3; i++) {
-        const dot = document.createElement('span');
-        dot.className = 'dot';
-        dotContainer.appendChild(dot);
+      if (!typingIndicator) {
+          typingIndicator = document.createElement('div');
+          typingIndicator.id = typingIndicatorId;
+          typingIndicator.className = 'typing-indicator';
+          
+          typingIndicator.innerHTML = `
+              <span class="typing-text">${username} is typing</span>
+              <div class="typing-dots">
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+              </div>
+          `;
+          
+          typingContainer.appendChild(typingIndicator);
+          
+          // Only scroll if user is near bottom
+          const messages = document.getElementById('messages');
+          const isNearBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 100;
+          if (isNearBottom) {
+              messages.scrollTop = messages.scrollHeight;
+          }
       }
-      
-      typingIndicator.innerHTML = `
-        <span class="typing-text">${username} is typing</span>
-      `;
-      typingIndicator.appendChild(dotContainer);
-      
-      const typingContainer = document.getElementById('typingContainer');
-      if (!typingContainer.contains(typingIndicator)) {
-        typingContainer.appendChild(typingIndicator);
-        
-        // Only scroll if user is near bottom
-        const messages = document.getElementById('messages');
-        const isNearBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 100;
-        if (isNearBottom) {
-          messages.scrollTop = messages.scrollHeight;
-        }
-      }
-    }
   } else if (typingIndicator) {
-    typingIndicator.remove();
+      typingIndicator.remove();
   }
 }
 
+
 function clearChat() {
   if (typingTimeout) {
-    clearTimeout(typingTimeout);
+      clearTimeout(typingTimeout);
   }
   sendTypingStatus(false);
+  
+  const typingContainer = document.getElementById('typingContainer');
+  if (typingContainer) {
+      typingContainer.innerHTML = '';
+  }
+  
   messageInput.value = '';
   messagesDiv.innerHTML = '';
+  ensureTypingContainer();
+  
   currentChat = null;
   currentChatType = null;
 }
@@ -1176,78 +1926,218 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
+
+function createCallScreen(isVideo = false) {
+  const callScreen = document.createElement('div');
+  callScreen.id = 'callScreen';
+  callScreen.className = 'chat-screen call-screen';
+  
+  callScreen.innerHTML = `
+      ${isVideo ? `
+          <div class="video-content">
+              <video id="remoteVideo" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
+              <video id="localVideo" autoplay muted playsinline style="position: absolute; bottom: 24px; right: 24px; width: 120px; height: 160px; border-radius: 12px; object-fit: cover;"></video>
+              <div class="timer">00:00</div>
+          </div>
+      ` : `
+          <div class="voice-content">
+              <div class="avatar">
+                  ${getInitials(currentChat)}
+              </div>
+              <div class="caller-name">${currentChat}</div>
+              <div class="timer">00:00</div>
+          </div>
+      `}
+      
+      <div class="call-controls">
+          <button class="action-button" onclick="toggleMute()" id="muteButton">
+              <i class="fas fa-microphone"></i>
+          </button>
+          ${isVideo ? `
+              <button class="action-button" onclick="toggleVideo()" id="videoButton">
+                  <i class="fas fa-video"></i>
+              </button>
+          ` : ''}
+          <button class="action-button end-call" onclick="endCall()">
+              <i class="fas fa-phone-slash"></i>
+          </button>
+      </div>
+  `;
+
+  // Remove existing call screen if any
+  const existingCallScreen = document.getElementById('callScreen');
+  if (existingCallScreen) {
+      existingCallScreen.remove();
+  }
+
+  const style = document.createElement('style');
+  style.textContent = `
+      .call-screen {
+          background: #000 !important;
+          height: 100vh;
+          display: flex;
+          flex-direction: column;
+      }
+
+      .video-content {
+          flex: 1;
+          position: relative;
+          background: #000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+      }
+
+      #remoteVideo {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          background: #000;
+      }
+
+      #localVideo {
+          position: absolute;
+          bottom: 24px;
+          right: 24px;
+          width: 120px;
+          height: 160px;
+          border-radius: 12px;
+          object-fit: cover;
+          background: #000;
+          z-index: 2;
+      }
+
+      .call-controls {
+          padding: 20px;
+          display: flex;
+          justify-content: center;
+          gap: 20px;
+          background: transparent;
+          position: relative;
+          z-index: 3;
+      }
+
+      .chat-header {
+          background: transparent;
+          z-index: 3;
+      }
+  `;
+  document.head.appendChild(style);
+
+  document.getElementById('app').appendChild(callScreen);
+  callScreen.classList.add('show');
+  return callScreen;
+}
+
+
+
+
+function startTimer() {
+    let seconds = 0;
+    const timerElement = document.querySelector('.timer');
+    
+    timerInterval = setInterval(() => {
+        seconds++;
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+        timerElement.textContent = `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
+    }, 1000);
+}
+
+
+function updateCallingStatus(status) {
+  const chatTitle = document.querySelector('#callScreen .chat-title');
+  if (chatTitle) {
+      chatTitle.textContent = status;
+  }
+}
+
+function onCallConnected() {
+  //updateCallingStatus('Connected');
+  startTimer();
+}
+
+
 async function startCall(withVideo = false) {
   if (isCallInProgress || currentChatType !== 'direct') {
-    await showCustomAlert('A call is already in progress or you\'re not in a direct chat.');
-    return;
+      await showCustomAlert('A call is already in progress or you\'re not in a direct chat.');
+      return;
   }
 
   try {
-    isCallInProgress = true;
-    isVideoCall = withVideo;
-    
-    // Get media stream first
-    const mediaConstraints = { audio: true, video: withVideo };
-    localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-    
-    if (withVideo) {
-      document.getElementById('localVideo').srcObject = localStream;
-      document.getElementById('videoContainer').classList.remove('hidden');
-    }
-    
-    // Create peer connection and get offer
-    peerConnection = await webrtcHandler.createPeerConnection();
-    const offer = await webrtcHandler.startCall(localStream);
-    
-    const callId = Date.now().toString();
-    currentCall = {
-      id: callId,
-      to: currentChat,
-      from: user.is.alias,
-      startTime: Date.now(),
-      isVideo: withVideo
-    };
+      isCallInProgress = true;
+      isVideoCall = withVideo;
+      
+      // Get media stream with explicit video constraints
+      const mediaConstraints = { 
+          audio: true, 
+          video: withVideo ? {
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+          } : false 
+      };
+      
+      localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+      console.log('Local stream tracks:', localStream.getTracks());
 
-    // Update UI immediately
-    startVoiceCallBtn.classList.add('hidden');
-    startVideoCallBtn.classList.add('hidden');
-    endCallBtn.classList.remove('hidden');
-
-    // Setup ICE candidate listener before saving call data
-    setupICECandidateListener(callId);
-
-    // Save call data with explicit acknowledgment
-    const callData = {
-      type: 'offer',
-      callId: callId,
-      from: user.is.alias,
-      to: currentChat,
-      offerType: offer.type,
-      offerSdp: offer.sdp,
-      startTime: currentCall.startTime,
-      isVideo: withVideo,
-      status: 'connecting'
-    };
-
-    await new Promise((resolve, reject) => {
-      gun.get('calls').get(callId).put(callData, (ack) => {
-        if (ack.err) reject(new Error(ack.err));
-        else resolve();
-      });
-    });
-
-    // Set timeout for call establishment
-    callProcessingTimeout = setTimeout(() => {
-      if (isCallInProgress && peerConnection?.iceConnectionState !== 'connected') {
-        endCall();
-        showCustomAlert('Call setup timed out. Please try again.');
+      // Create call screen first
+      createCallScreen(withVideo);
+      
+      if (withVideo) {
+          const localVideo = document.getElementById('localVideo');
+          if (localVideo) {
+              localVideo.srcObject = localStream;
+          }
       }
-    }, 30000);
 
+      // Create peer connection and add tracks
+      peerConnection = await webrtcHandler.createPeerConnection();
+
+            // Add tracks to peer connection
+            localStream.getTracks().forEach(track => {
+              peerConnection.addTrack(track, localStream);
+          });
+          
+          // Create and set local description
+          const offer = await peerConnection.createOffer({
+              offerToReceiveAudio: true,
+              offerToReceiveVideo: withVideo
+          });
+          await peerConnection.setLocalDescription(offer);
+          
+          const callId = Date.now().toString();
+          currentCall = {
+              id: callId,
+              to: currentChat,
+              from: user.is.alias,
+              startTime: Date.now(),
+              isVideo: withVideo
+          };
+    
+          // Send call data
+          const callData = {
+              type: 'offer',
+              callId: callId,
+              from: user.is.alias,
+              to: currentChat,
+              offerType: offer.type,
+              offerSdp: offer.sdp,
+              startTime: currentCall.startTime,
+              isVideo: withVideo,
+              status: 'connecting'
+          };
+    
+          await new Promise((resolve, reject) => {
+              gun.get('calls').get(callId).put(callData, (ack) => {
+                  if (ack.err) reject(new Error(ack.err));
+                  else resolve();
+              });
+          });
+      
   } catch (error) {
-    console.error('Error starting call:', error);
-    await showCustomAlert('Error starting call: ' + error.message);
-    await endCall();
+      console.error('Error in startCall:', error);
+      await showCustomAlert('Error starting call: ' + error.message);
+      await endCall();
   }
 }
 
@@ -1264,92 +2154,112 @@ function monitorCallState(callId) {
 }
 
 async function handleIncomingCall(data) {
-  // Validate call data
-  if (!data || !data.callId) {
-    console.error('Invalid call data received:', data);
-    return;
-  }
-
-  // Prevent processing multiple calls simultaneously
-  if (processingCall || isCallInProgress) {
-    console.log('Already processing/in a call, rejecting incoming call');
-    await rejectCall(data, 'busy');
-    return;
-  }
-
-  try {
-    processingCall = true;
-    const confirmed = confirm(`Incoming ${data.isVideo ? 'video' : 'voice'} call from ${data.from}. Accept?`);
-
-    if (!confirmed) {
-      await rejectCall(data, 'declined');
+  if (isCallInProgress) {
+      console.log('Already in a call, ignoring incoming call');
       return;
-    }
-
-    // Initialize call state
-    isCallInProgress = true;
-    isVideoCall = data.isVideo;
-    
-    // Get media stream
-    const mediaConstraints = { audio: true, video: data.isVideo };
-    localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-    
-    if (data.isVideo) {
-      document.getElementById('localVideo').srcObject = localStream;
-      document.getElementById('videoContainer').classList.remove('hidden');
-    }
-
-    // Create and setup peer connection
-    peerConnection = await webrtcHandler.createPeerConnection();
-    
-    // Handle the offer
-    const offer = {
-      type: data.offerType,
-      sdp: data.offerSdp
-    };
-
-    // Set remote description and create answer
-    await peerConnection.setRemoteDescription(offer);
-    const answer = await webrtcHandler.handleIncomingCall(offer, localStream);
-    
-    // Update call state
-    currentCall = {
-      id: data.callId,
-      to: data.from,
-      from: user.is.alias,
-      startTime: Date.now(),
-      isVideo: data.isVideo
-    };
-
-    // Send answer
-    await new Promise((resolve) => {
-      gun.get('calls').get(data.callId).put({
-        type: 'answer',
-        from: user.is.alias,
-        to: data.from,
-        answerType: answer.type,
-        answerSdp: answer.sdp,
-        time: Date.now(),
-        status: 'accepted'
-      }, resolve);
-    });
-
-    // Setup ICE handling
-    setupICECandidateListener(data.callId);
-    sendBufferedICECandidates(data.callId);
-
-    // Update UI
-    updateCallUI(true);
-
-  } catch (error) {
-    console.error('Error handling incoming call:', error);
-    await rejectCall(data, 'error');
-    await showCustomAlert(`Error accepting call: ${error.message}`);
-    await endCall();
-  } finally {
-    processingCall = false;
+  }
+  
+  const callType = data.isVideo ? 'video' : 'voice';
+  const confirmed = confirm(`Incoming ${callType} call from ${data.from}. Accept?`);
+  
+  if (confirmed) {
+      try {
+          isCallInProgress = true;
+          isVideoCall = data.isVideo;
+          const mediaConstraints = { audio: true, video: data.isVideo };
+          localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+          console.log('Local stream obtained:', localStream.getTracks());
+          
+          // Create and show call screen
+          createCallScreen(data.isVideo);
+          //updateCallingStatus('Incomming...');
+          // Update video elements if it's a video call
+          if (data.isVideo) {
+              const localVideo = document.getElementById('localVideo');
+              if (localVideo) {
+                  localVideo.srcObject = localStream;
+              }
+              //document.getElementById('videoContainer').classList.remove('hidden');
+          }
+          
+          peerConnection = await webrtcHandler.createPeerConnection();
+          
+          const offer = {
+              type: data.offerType,
+              sdp: data.offerSdp
+          };
+          const answer = await webrtcHandler.handleIncomingCall(offer, localStream);
+          
+          currentCall = {
+              id: data.callId,
+              to: data.from,
+              from: user.is.alias,
+              startTime: Date.now(),
+              isVideo: data.isVideo
+          };
+          
+          const answerData = {
+              type: 'answer',
+              callId: data.callId,
+              from: user.is.alias,
+              to: data.from,
+              answerType: answer.type,
+              answerSdp: answer.sdp,
+              time: currentCall.startTime,
+              isVideo: data.isVideo
+          };
+          
+          gun.get(`calls`).get(data.callId).put(answerData);
+          console.log('Answer sent:', answerData);
+          setupICECandidateListener(data.callId);
+          
+          // Start the call timer
+          startTimer();
+          
+          // Send buffered ICE candidates
+          sendBufferedICECandidates(data.callId);
+          
+          // Set a timeout to check if the call was established
+          setTimeout(async () => {
+              if (peerConnection && 
+                  peerConnection.iceConnectionState !== 'connected' && 
+                  peerConnection.iceConnectionState !== 'completed') {
+                  console.log('Call setup timeout. Current ICE state:', peerConnection.iceConnectionState);
+                  await showCustomAlert('Call setup timed out. Please try again.');
+                  endCall();
+              }
+          }, 30000);  // 30 seconds timeout
+          
+      } catch (error) {
+          console.error('Error accepting call:', error);
+          await showCustomAlert(`Error accepting call: ${error.message}`);
+          endCall();
+      }
+  } else {
+      gun.get(`calls`).get(data.callId).put({ 
+          type: 'reject',
+          from: user.is.alias,
+          to: data.from,
+          time: Date.now()
+      });
   }
 }
+
+function setupPeerConnectionListeners(peerConnection) {
+  peerConnection.onsignalingstatechange = () => {
+      console.log('Signaling State:', peerConnection.signalingState);
+      signalingState = peerConnection.signalingState;
+  };
+
+  peerConnection.oniceconnectionstatechange = () => {
+      console.log('ICE Connection State:', peerConnection.iceConnectionState);
+      if (peerConnection.iceConnectionState === 'failed' || 
+          peerConnection.iceConnectionState === 'disconnected') {
+          endCall();
+      }
+  };
+}
+
 
 function checkWebRTCSetup() {
   if (!webrtcHandler) {
@@ -1375,45 +2285,43 @@ function checkWebRTCSetup() {
   return true;
 }
 
+
 (async function () {
   const urlString = window.location.href;
   const url = new URL(urlString);
   const username = url.searchParams.get('username');
   let password = url.searchParams.get('password');
-  password += "Trus@"+password;
   if (username && password) {
-    try {
-      await login(null, username.trim(), password.trim());
-    } catch (err) {
-      console.log(err);
-      await register(null, username.trim(), password.trim());
-      await login(null, username.trim(), password.trim());
-    } 
+      //password += "Trus@"+password;
+      try {
+          await login(null, username.trim(), password.trim());
+      } catch (err) {
+          console.log(err);
+          await register(null, username.trim(), password.trim());
+          await login(null, username.trim(), password.trim());
+      } 
   }
 })();
 
-async function rejectCall(data, reason) {
-  await new Promise((resolve) => {
-    gun.get('calls').get(data.callId).put({
-      ...data,
-      status: 'rejected',
-      reason: reason,
-      time: Date.now()
-    }, resolve);
-  });
-}
-
-function updateCallUI(showCall = true) {
+const updateCallUI = (showCall = true) => {
+  const headerActions = document.querySelector('.header-actions');
   if (showCall) {
-    startVoiceCallBtn.classList.add('hidden');
-    startVideoCallBtn.classList.add('hidden');
-    endCallBtn.classList.remove('hidden');
+      headerActions.innerHTML = `
+          <button class="action-button" onclick="endCall()">
+              <i class="fas fa-phone-slash"></i>
+          </button>
+      `;
   } else {
-    startVoiceCallBtn.classList.remove('hidden');
-    startVideoCallBtn.classList.remove('hidden');
-    endCallBtn.classList.add('hidden');
+      headerActions.innerHTML = `
+          <button class="action-button" onclick="startCall(false)">
+              <i class="fas fa-phone"></i>
+          </button>
+          <button class="action-button" onclick="startCall(true)">
+              <i class="fas fa-video"></i>
+          </button>
+      `;
   }
-}
+};
 
 setInterval(() => {
   if (isCallInProgress) {
@@ -1422,3 +2330,80 @@ setInterval(() => {
 }, 5000);
 
 
+function showCustomAlert(message) {
+  return new Promise((resolve) => {
+      const statusDialog = document.getElementById('statusDialog');
+      const statusTitle = document.getElementById('statusTitle');
+      const statusMessage = document.getElementById('statusMessage');
+      
+      statusTitle.textContent = 'Alert';
+      statusMessage.textContent = message;
+      
+      const closeButton = statusDialog.querySelector('.dialog-button');
+      const originalClickHandler = closeButton.onclick;
+      
+      closeButton.onclick = () => {
+          closeDialog('statusDialog');
+          closeButton.onclick = originalClickHandler;
+          resolve();
+      };
+      
+      openDialog('statusDialog');
+  });
+}
+
+
+function showCustomConfirm(message) {
+  return new Promise((resolve) => {
+      // Create confirmation dialog dynamically
+      const dialogOverlay = document.createElement('div');
+      dialogOverlay.className = 'dialog-overlay';
+      dialogOverlay.id = 'confirmDialog';
+      
+      dialogOverlay.innerHTML = `
+          <div class="dialog-box">
+              <h3>Confirm</h3>
+              <p style="text-align: center; margin-bottom: 20px;">${message}</p>
+              <div class="dialog-buttons">
+                  <button class="dialog-button cancel">Cancel</button>
+                  <button class="dialog-button confirm">Confirm</button>
+              </div>
+          </div>
+      `;
+      
+      document.body.appendChild(dialogOverlay);
+      
+      const handleResponse = (confirmed) => {
+          document.body.removeChild(dialogOverlay);
+          resolve(confirmed);
+      };
+      
+      dialogOverlay.querySelector('.cancel').onclick = () => handleResponse(false);
+      dialogOverlay.querySelector('.confirm').onclick = () => handleResponse(true);
+      
+      dialogOverlay.classList.add('show');
+  });
+}
+
+
+function toggleMute() {
+  if (localStream) {
+      const audioTrack = localStream.getAudioTracks()[0];
+      if (audioTrack) {
+          audioTrack.enabled = !audioTrack.enabled;
+          const muteButton = document.getElementById('muteButton');
+          muteButton.innerHTML = `<i class="fas fa-microphone${audioTrack.enabled ? '' : '-slash'}"></i>`;
+      }
+  }
+}
+
+function toggleVideo() {
+  if (localStream) {
+      const videoTrack = localStream.getVideoTracks()[0];
+      if (videoTrack) {
+          videoTrack.enabled = !videoTrack.enabled;
+          const videoButton = document.getElementById('videoButton');
+          videoButton.innerHTML = `<i class="fas fa-video${videoTrack.enabled ? '' : '-slash'}"></i>`;
+      }
+  }
+}

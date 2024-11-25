@@ -1,280 +1,1451 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Decentralized End-to-End Messenger</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-</head>
+    <title>Decentralized Messenger</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-primary: #110F00;
+            --bg-secondary: rgba(17, 15, 0, 0.95);
+            --accent-color: #776D31;
+            --text-primary: #FFFADD;
+            --text-secondary: #827F6A;
+            --border-color: #423802;
+            --cream-bg: #FFFADD;
+        }
 
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            background-image: url('./images/gunjs-background.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #app {
+            width: 100%;
+            max-width: 480px;
+            height: 100vh;
+            background: var(--bg-secondary);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Main Navigation */
+        .tab-container {
+            display: flex;
+            padding: 10px;
+            gap: 10px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            border-radius: 8px;
+            color: var(--text-secondary);
+            background: transparent;
+        }
+
+        .tab.active {
+            background: var(--cream-bg);
+            color: var(--bg-primary);
+        }
+
+        /* Search Box */
+        .search-box {
+            margin: 10px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 8px;
+            color: var(--text-primary);
+            width: calc(100% - 20px);
+        }
+
+        /* Lists: Contacts and Streams */
+        .list-container {
+            padding: 10px;
+            display: none;
+        }
+
+        .list-container.active {
+            display: block;
+        }
+
+        /* Contacts List */
+        .contact-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            border-radius: 8px;
+        }
+
+        .contact-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* Streams Grid */
+        .streams-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            padding: 10px;
+        }
+
+        .stream-item {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            aspect-ratio: 1;
+        }
+
+        /* Shared Avatar Styles */
+        .avatar {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            font-weight: 500;
+        }
+
+        .stream-item .avatar {
+            width: 50px;
+            height: 50px;
+            margin: 0 0 8px 0;
+        }
+
+        /* Chat/Stream Interface */
+        .chat-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-secondary);
+            display: none;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .back-button {
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            margin-right: 15px;
+            cursor: pointer;
+            font-size: 20px;
+        }
+
+        .chat-title {
+            flex: 1;
+            color: var(--text-primary);
+        }
+
+        /* Message Area */
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .message {
+            max-width: 80%;
+            margin: 8px 0;
+            padding: 12px;
+            border-radius: 12px;
+        }
+
+        .message.received {
+            background: var(--accent-color);
+            align-self: flex-start;
+            border-radius: 0 12px 12px 12px;
+        }
+
+        .message.sent {
+            background: var(--cream-bg);
+            color: var(--bg-primary);
+            align-self: flex-end;
+            border-radius: 12px 0 12px 12px;
+        }
+
+        /* File Message */
+        .file-message {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 5px;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .file-button {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            background: var(--cream-bg);
+            color: var(--bg-primary);
+            cursor: pointer;
+        }
+
+        /* Input Area */
+        .chat-footer {
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 12px 15px;
+            border-radius: 20px;
+            border: none;
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+        }
+
+        /* Action Buttons */
+        .action-button {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            border: none;
+            color: var(--text-primary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .add-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--cream-bg);
+            color: var(--bg-primary);
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        /* Dialogs */
+        .dialog-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .dialog-box {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            width: 90%;
+            max-width: 320px;
+        }
+
+        .dialog-box h3 {
+            color: var(--text-primary);
+            margin-bottom: 15px;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .dialog-input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-primary);
+            margin-bottom: 20px;
+        }
+
+        .dialog-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .dialog-button {
+            padding: 10px 30px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .dialog-button.cancel {
+            background: var(--cream-bg);
+            color: var(--bg-primary);
+        }
+
+        .dialog-button.confirm {
+            background: var(--accent-color);
+            color: var(--text-primary);
+        }
+
+        /* Stream Management */
+        .manage-users-button {
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            padding: 8px;
+            cursor: pointer;
+            font-size: 20px;
+        }
+
+        .stream-members-list {
+            max-height: 300px;
+            overflow-y: auto;
+            margin: 15px 0;
+        }
+
+        .member-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .member-info {
+            flex: 1;
+        }
+
+        .member-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        /* Utility Classes */
+        .show {
+            display: flex !important;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .stream-members-dialog {
+            background: var(--bg-secondary);
+            max-width: 360px;
+            padding: 0;
+        }
+
+        .dialog-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .dialog-header h3 {
+            margin: 0;
+            font-weight: normal;
+        }
+
+        .close-button {
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            cursor: pointer;
+            padding: 5px;
+            font-size: 18px;
+        }
+
+        .members-list {
+            padding: 10px 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .member-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            border-bottom: 1px solid rgba(255, 250, 221, 0.1);
+        }
+
+        .member-item:last-child {
+            border-bottom: none;
+        }
+
+        .member-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            font-weight: 500;
+        }
+
+        .member-info {
+            flex: 1;
+            color: var(--text-primary);
+        }
+
+        .remove-member {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            border: none;
+            color: var(--text-primary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .add-member-icon {
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-primary);
+            cursor: pointer;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .add-member-icon i {
+            color: var(--accent-color);
+        }
+
+        .dialog-input {
+            margin: 20px;
+            width: calc(100% - 40px);
+        }
+
+        .dialog-buttons {
+            padding: 0 20px 20px;
+        }
+
+        .video-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+        }   
+
+        .video-container.hidden {
+            display: none;
+        }
+
+        .video-container video {
+            max-width: 45%;
+            border-radius: 8px;
+            background: #000;
+        }
+
+        #localVideo {
+            transform: scaleX(-1);
+        }
+
+        .call-screen {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        background: var(--bg-primary);
+    }
+
+    .voice-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        gap: 20px;
+    }
+
+    .voice-content .avatar {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        margin: 0;
+        font-size: 40px;
+    }
+
+    .voice-content .caller-name {
+        font-size: 24px;
+        color: var(--text-primary);
+    }
+
+    .video-content {
+        flex: 1;
+        position: relative;
+        background: #000;
+    }
+
+    #remoteVideo {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    #localVideo {
+        position: absolute;
+        bottom: 24px;
+        right: 24px;
+        width: 120px;
+        height: 160px;
+        border-radius: 12px;
+        object-fit: cover;
+    }
+
+    .call-controls {
+        padding: 32px;
+        display: flex;
+        justify-content: center;
+        gap: 32px;
+        background: transparent;
+    }
+
+    .call-controls .action-button {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        border: none;
+        font-size: 24px;
+        background: var(--accent-color);
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+    }
+
+    .call-controls .action-button.end-call {
+        background: #FF453A;
+    }
+
+    .timer {
+        color: var(--text-secondary);
+        font-size: 16px;
+    }
+
+    .chat-header {
+        padding: 15px;
+        display: flex;
+        align-items: center;
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .chat-title {
+        font-size: 18px;
+        font-weight: 500;
+    }
+
+    .chat-title {
+        flex: 1;
+        color: var(--text-primary);
+        margin-right: 10px;
+    }
+
+    .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .call-buttons {
+        display: flex;
+        gap: 8px;
+    }
+
+    .header-actions .action-button {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: var(--accent-color);
+        border: none;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+    }
+
+    .back-button {
+        background: none;
+        border: none;
+        color: var(--text-primary);
+        margin-right: 15px;
+        cursor: pointer;
+        font-size: 20px;
+        display: flex;
+        align-items: center;
+    }
+
+    .expiry-dialog {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: var(--bg-secondary);
+        border-radius: 12px;
+        padding: 20px;
+        width: 90%;
+        max-width: 320px;
+        z-index: 2000;
+        border: 1px solid var(--border-color);
+    }
+
+    .expiry-dialog h3 {
+        color: var(--text-primary);
+        margin-bottom: 15px;
+        text-align: center;
+        font-weight: 500;
+    }
+
+    .expiry-input {
+        width: 100%;
+        padding: 12px;
+        margin: 10px 0 20px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        background: transparent;
+        color: var(--text-primary);
+    }
+
+    .expiry-buttons {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+    }
+
+    .expiry-button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 500;
+    }
+
+    .expiry-button.confirm {
+        background: var(--accent-color);
+        color: var(--text-primary);
+    }
+
+    .expiry-button.cancel {
+        background: var(--cream-bg);
+        color: var(--bg-primary);
+    }
+
+    .expiry-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(5px);
+        z-index: 1999;
+    }
+
+    .expiry-hint {
+        color: var(--text-secondary);
+        font-size: 14px;
+        text-align: center;
+        margin-bottom: 15px;
+    }
+
+    .file-preview {
+        max-width: 80%;
+        margin: 8px 0;
+        padding: 12px;
+        border-radius: 12px;
+        background: var(--cream-bg);
+        color: var(--bg-primary);
+    }
+
+    .file-preview.sent {
+        align-self: flex-end;
+        border-radius: 12px 0 12px 12px;
+    }
+
+    .file-preview.received {
+        align-self: flex-start;
+        background: var(--accent-color);
+        color: var(--text-primary);
+        border-radius: 0 12px 12px 12px;
+    }
+
+    .file-preview img {
+        max-width: 200px;
+        max-height: 200px;
+        border-radius: 8px;
+        margin-top: 8px;
+    }
+
+    .file-preview video {
+        max-width: 200px;
+        max-height: 200px;
+        border-radius: 8px;
+        margin-top: 8px;
+    }
+
+    .document-preview {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        margin-top: 8px;
+    }
+
+    .document-icon {
+        font-size: 24px;
+    }
+
+    .file-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 8px;
+    }
+
+    .file-button {
+        padding: 6px 12px;
+        border: none;
+        border-radius: 4px;
+        background: var(--accent-color);
+        color: var(--text-primary);
+        cursor: pointer;
+    }
+
+    .loading-spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 2px solid #f3f3f3;
+        border-top: 2px solid var(--accent-color);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .file-message {
+        padding: 10px;
+        border-radius: 8px;
+        margin-top: 5px;
+    }
+
+    .file-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 8px 0;
+        padding: 8px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+    }
+
+    .file-info i {
+        font-size: 20px;
+    }
+
+    .file-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+    }
+
+    .file-button {
+        padding: 6px 12px;
+        border: none;
+        border-radius: 4px;
+        background: var(--accent-color);
+        color: var(--text-primary);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .file-button:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .members-list {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+
+    .member-item {
+        display: flex;
+        align-items: center;
+        padding: 12px 15px;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .member-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: var(--accent-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 12px;
+    }
+
+    .member-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .member-name {
+        font-size: 16px;
+        color: var(--text-primary);
+    }
+
+    .member-role {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+
+    .member-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .admin-badge {
+        background: var(--accent-color);
+        color: var(--text-primary);
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+    }
+
+    .member-action-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: none;
+        background: var(--accent-color);
+        color: var(--text-primary);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .member-action-btn.remove {
+        background: #ff4444;
+    }
+
+    .stream-item {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        padding: 15px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .stream-item:hover {
+        background: rgba(255, 255, 255, 0.1);
+        transform: translateY(-1px);
+    }
+
+    .stream-item .avatar {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: var(--accent-color);
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 500;
+        margin-bottom: 8px;
+        font-size: 18px;
+    }
+
+    .stream-info {
+        text-align: center;
+        width: 100%;
+    }
+
+    .stream-info .name {
+        font-size: 14px;
+        font-weight: 500;
+        margin-bottom: 4px;
+        word-break: break-word;
+        color: var(--text-primary);
+    }
+
+    .stream-info .member-count {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+
+    .streams-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 15px;
+        padding: 15px;
+    }
+
+    @media (min-width: 480px) {
+        .streams-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+    }
+
+    .member-item {
+        display: flex;
+        align-items: center;
+        padding: 12px 15px;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .member-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: var(--accent-color);
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 12px;
+        font-size: 14px;
+    }
+
+    .member-info {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .member-name {
+        font-size: 14px;
+        color: var(--text-primary);
+    }
+
+    .admin-badge {
+        background: var(--accent-color);
+        color: var(--text-primary);
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+    }
+
+    .remove-member {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: none;
+        background: #ff4444;
+        color: white;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .typing-container {
+        position: absolute;
+        bottom: 70px;
+        left: 0;
+        right: 0;
+        padding: 0 15px;
+    }
+
+    .typing-indicator {
+        background: rgba(255, 255, 255, 0.1);
+        padding: 8px 12px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .typing-text {
+        color: var(--text-secondary);
+        font-size: 14px;
+    }
+
+    .typing-dots {
+        display: flex;
+        gap: 4px;
+    }
+
+    .dot {
+        width: 6px;
+        height: 6px;
+        background: var(--text-secondary);
+        border-radius: 50%;
+        animation: dot-pulse 1.5s infinite;
+    }
+
+    .dot:nth-child(2) { animation-delay: 0.2s; }
+    .dot:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes dot-pulse {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(0.8); opacity: 0.5; }
+    }
+
+    </style>
+</head>
 <body>
     <div id="app">
+        <!-- Main Interface -->
+        <div class="main-screen">
+            <!-- Navigation Tabs -->
+            <div class="tab-container">
+                <div class="tab active" onclick="switchTab('contacts')">Contacts</div>
+                <div class="tab" onclick="switchTab('streams')">Streams</div>
+            </div>
 
-        <div id="auth">
-            <h2 class="title">Decentralized End-to-End Messenger</h2>
-            <!-- <input type="text" id="username" class="input-box-style w-96" placeholder="Enter Username">
-            <input type="password" id="password" class="input-box-style w-96" placeholder="Enter Password">
-            <small class="suggest-text">Password must be at least 8 characters long and contain at least one lowercase
-                letter, one uppercase
-                letter, one number, and one special character.</small>
-            <button type="button" class="primary-button-style w-100" id="login">Login</button>
-            <button type="button" class="primary-button-style w-100" id="register">Register</button> -->
-        </div>
+            <!-- Search Box -->
+            <input type="text" class="search-box" placeholder="Search Contacts">
 
-        <div id="chat" class="hidden chat-room-container">
-            <div id="sidebar">
-                <div class="sidebar-tabs">
-                    <div class="sidebar-tab active" data-tab="contacts">Contacts</div>
-                    <div class="sidebar-tab" data-tab="groups">Streams</div>
-                </div>
-                <div id="contacts" class="sidebar-content active">
-                    <div id="contactsList"></div>
-                    <div class="add-item">
-                        <input type="text" id="newContactInput" placeholder="Enter username to add"
-                            class="input-box-style">
-                        <button id="addContact" type="button" class="primary-button-style"><i
-                                class="fas fa-plus"></i></button>
-                    </div>
-                </div>
-                <div id="groups" class="sidebar-content">
-                    <div id="groupsList"></div>
-                    <div class="add-item">
-                        <input type="text" id="newGroupName" placeholder="Enter stream name" class="input-box-style">
-                        <button id="createGroup" type="button" class="primary-button-style"><i
-                                class="fas fa-plus"></i></button>
-                    </div>
+            <!-- Contacts List -->
+            <div id="contactsList" class="list-container active">
+                <!-- Contacts will be populated here -->
+            </div>
+
+            <!-- Streams Grid -->
+            <div id="streamsList" class="list-container">
+                <div class="streams-grid">
+                    <!-- Streams will be populated here -->
                 </div>
             </div>
-            <div id="chatRoom" class="chat-room">
-                <button id="backButton" class="back-button">
+
+            <!-- Add Button -->
+            <button class="add-button" onclick="handleAddButton()">+</button>
+        </div>
+
+        <!-- Chat/Stream Interface -->
+        <div class="chat-screen" id="chatScreen">
+            <div class="chat-header">
+                <button class="back-button" onclick="goBack()">
                     <i class="fas fa-arrow-left"></i>
                 </button>
-                <div id="callControls" class="hidden">
-                    <h2 id="currentChatHeader" class="title title-chatroom">Select a contact or stream to start chatting</h2>
-                    <button id="startVoiceCall" type="button" class="recendButton primary-button-style"><i
-                            class="fas fa-phone"></i></button>
-                    <button id="startVideoCall" type="button" class="recendButtonVideo primary-button-style"><i class="fas fa-video"></i></button>
-                    <!-- <button id="endVoiceCall" type="button" class="hidden recendButton primary-button-style"><i
-                            class="fas fa-phone-slash"></i></button> -->
-                    <button id="endCall" type="button" class="hidden recendButton primary-button-style"><i class="fas fa-phone-slash"></i></button>
+                <div class="chat-title" id="chatTitle"></div>
+                <div class="header-actions">
+                    <!-- Will be populated based on context -->
                 </div>
-                <div id="videoContainer" class="hidden">
-                    <video id="localVideo" autoplay muted></video>
-                    <video id="remoteVideo" autoplay></video>
-                </div>
-                <div id="messages"></div>
-                <div id="typingContainer" class="typing-container"></div>
-                <div id="messageControls">
-                    <input type="text" id="messageInput" placeholder="Type a message" class="input-box-style">
-                    <button type="button" class="primary-button-style send-message mr-4" id="sendMessage"><img
-                            src="./images/send.png" alt="send"></button>
-                    <!-- <input type="file" id="fileInput" class="hidden"> -->
-                    <input type="file" id="fileInput" accept="image/*,video/*,application/*,text/*" style="display: none;">
-                    <button type="button" class="primary-button-style send-message" id="sendFile"><i
-                            class="fas fa-paperclip"></i></button>
-                    <!-- <button id="sendFile" type="button" class="rimary-button-style"></button> -->
-                </div>
-                <div id="groupControls">
-                    <input type="text" id="addToGroupInput" placeholder="Enter username to add to stream"
-                        class="input-box-style">
-                    <button id="addToGroup"><i class="fas fa-plus"></i></button>
+            </div>
+
+            <div class="messages" id="messages">
+                <!-- Messages will be populated here -->
+            </div>
+
+            <div class="chat-footer">
+                <input type="file" id="fileInput" accept="image/*,video/*,application/*,text/*" style="display: none;">
+                <button class="action-button">
+                    <i class="fas fa-paperclip" id="sendFile"></i>
+                </button>
+                <input type="text" class="message-input" placeholder="Type a message">
+                <button class="action-button">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Dialogs -->
+        <!-- Add Contact Dialog -->
+        <div class="dialog-overlay" id="addContactDialog">
+            <div class="dialog-box">
+                <h3>Add Contact</h3>
+                <input type="text" class="dialog-input" placeholder="Enter User name">
+                <div class="dialog-buttons">
+                    <button class="dialog-button cancel" onclick="closeDialog('addContactDialog')">Cancel</button>
+                    <button class="dialog-button confirm" onclick="addContact()">Add</button>
                 </div>
             </div>
         </div>
-    </div>
-    <audio id="remoteAudio" autoplay></audio>
-    <div id="customAlert" class="custom-dialog hidden">
-        <div class="dialog-content">
-            <p id="alertMessage"></p>
-            <button class="primary-button-style" id="alertOk">OK</button>
+
+        <!-- Add Stream Dialog -->
+        <div class="dialog-overlay" id="addStreamDialog">
+            <div class="dialog-box">
+                <h3>Add Stream</h3>
+                <input type="text" class="dialog-input" placeholder="Enter Stream name">
+                <div class="dialog-buttons">
+                    <button class="dialog-button cancel" onclick="closeDialog('addStreamDialog')">Cancel</button>
+                    <button class="dialog-button confirm" onclick="createStream()">Add</button>
+                </div>
+            </div>
         </div>
-    </div>
-    <div id="customPrompt" class="custom-dialog hidden">
-        <div class="dialog-content">
-            <p id="promptMessage"></p>
-            <input type="text" id="promptInput" class="input-box-style">
-            <div class="dialog-buttons">
-                <button class="primary-button-style" id="promptOk">Accept</button>
-                <button class="primary-button-style danger" id="promptCancel">Reject</button>
+
+        <!-- Status Dialog -->
+        <div class="dialog-overlay" id="statusDialog">
+            <div class="dialog-box">
+                <h3 id="statusTitle"></h3>
+                <p id="statusMessage" style="text-align: center; margin-bottom: 20px;"></p>
+                <div class="dialog-buttons">
+                    <button class="dialog-button confirm" onclick="closeDialog('statusDialog')">Ok</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stream Management Dialog -->
+        <div class="dialog-overlay" id="streamManagementDialog">
+            <div class="dialog-box stream-members-dialog">
+                <div class="dialog-header">
+                    <h3>Stream Members</h3>
+                    <button class="close-button" onclick="closeDialog('streamManagementDialog')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="members-list" id="streamMembersList">
+                    <!-- Members will be populated here -->
+                </div>
+                <div class="add-member-icon" onclick="openAddMemberDialog()">
+                    <i class="fas fa-user-plus"></i>
+                    <span>Add Member</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="dialog-overlay" id="addMemberDialog">
+            <div class="dialog-box">
+                <div class="dialog-header">
+                    <h3>Add Contact to Stream</h3>
+                    <button class="close-button" onclick="closeDialog('addMemberDialog')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <input type="text" class="dialog-input" placeholder="Enter User name">
+                <div class="dialog-buttons">
+                    <button class="dialog-button cancel" onclick="closeDialog('addMemberDialog')">Cancel</button>
+                    <button class="dialog-button confirm" onclick="addMemberToStream()">Add</button>
+                </div>
             </div>
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/ipfs-http-client/dist/index.min.js"></script>
-    <script src="notification-worker.js"></script>
+    <!-- <script src="notification-worker.js"></script>
+    <script src="notificationService.js"></script> -->
     <script src="webrtc.js"></script>
-    <script src="app.js"></script>
     <script>
-        // Tab switching
-        document.querySelectorAll('.sidebar-tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.sidebar-content').forEach(c => c.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById(tab.dataset.tab).classList.add('active');
-            });
-        });
+        // State Management
+        const state = {
+            currentView: 'contacts',
+            currentChat: null,
+            currentStream: null,
+            dummyContacts: [],
+            dummyStreams: []
+        };
 
-        // Function to show chatRoom
-        function showChatRoom() {
-            document.getElementById('chatRoom').style.display = 'flex';
-            document.getElementById('messageControls').style.display = 'flex';
-            document.getElementById('groupControls').style.display = 'none';
-            document.getElementById('startVoiceCall').classList.remove('hidden');
-            document.getElementById('startVideoCall').classList.remove('hidden');
+        // Initialize
+        // document.addEventListener('DOMContentLoaded', () => {
+        //     renderContacts();
+        //     renderStreams();
+        // });
+
+        // Rendering Functions
+        // function renderContacts() {
+        //     const container = document.getElementById('contactsList');
+        //     container.innerHTML = state.dummyContacts.map(contact => `
+        //         <div class="contact-item" onclick="openChat('${contact.name}')">
+        //             <div class="avatar">${getInitials(contact.name)}</div>
+        //             <div class="contact-info">
+        //                 <div class="contact-name">${contact.name}</div>
+        //                 <div class="contact-status">${contact.status}</div>
+        //             </div>
+        //         </div>
+        //     `).join('');
+        // }
+
+        // function renderStreams() {
+        //     const container = document.querySelector('.streams-grid');
+        //     container.innerHTML = state.dummyStreams.map(stream => `
+        //         <div class="stream-item" onclick="openStreamChat('${stream.name}')">
+        //             <div class="avatar">SA</div>
+        //             <div class="name">${stream.name}</div>
+        //         </div>
+        //     `).join('');
+        // }
+
+        // Navigation Functions
+        function switchTab(tab) {
+            state.currentView = tab;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.list-container').forEach(c => c.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(`${tab}List`).classList.add('active');
+            
+            // Update search placeholder and add button behavior
+            const searchBox = document.querySelector('.search-box');
+            searchBox.placeholder = `Search ${tab.charAt(0).toUpperCase() + tab.slice(1)}`;
         }
 
-        function showGroupRoom() {
-            document.getElementById('chatRoom').style.display = 'flex';
-            document.getElementById('messageControls').style.display = 'flex';
-            document.getElementById('groupControls').style.display = 'flex';
-            document.getElementById('startVoiceCall').classList.add('hidden');
-            document.getElementById('startVideoCall').classList.add('hidden');
-        }
-
-
-        document.getElementById('contactsList').addEventListener('click', (e) => {
-            if (e.target.classList.contains('contact')) {
-                showChatRoom();
+        function handleAddButton() {
+            if (state.currentView === 'contacts') {
+                openDialog('addContactDialog');
+            } else {
+                openDialog('addStreamDialog');
             }
-        });
-        document.getElementById('groupsList').addEventListener('click', (e) => {
-            if (e.target.classList.contains('group')) {
-                showGroupRoom();
-            }
-        });
-
-        function isMobile() {
-            return window.innerWidth <= 768;
         }
 
-        function showChatOnMobile() {
-            if (isMobile()) {
-                const sidebar = document.getElementById('sidebar');
-                const chatRoom = document.getElementById('chatRoom');
-                const backButton = document.getElementById('backButton');
+        // // Chat Functions
+        // function openChat(name) {
+        //     state.currentChat = name;
+        //     state.currentStream = null;
+            
+        //     const chatScreen = document.getElementById('chatScreen');
+        //     const chatTitle = document.getElementById('chatTitle');
+        //     const headerActions = document.querySelector('.header-actions');
+            
+        //     chatTitle.textContent = name;
+        //     headerActions.innerHTML = `
+        //         <button class="action-button" onclick="startVoiceCall()">
+        //             <i class="fas fa-phone"></i>
+        //         </button>
+        //         <button class="action-button" onclick="startVideoCall()">
+        //             <i class="fas fa-video"></i>
+        //         </button>
+        //     `;
+            
+        //     chatScreen.classList.add('show');
+        // }
+
+        // function openStreamChat(name) {
+        //     state.currentStream = name;
+        //     state.currentChat = null;
+            
+        //     const chatScreen = document.getElementById('chatScreen');
+        //     const chatTitle = document.getElementById('chatTitle');
+        //     const headerActions = document.querySelector('.header-actions');
+            
+        //     chatTitle.textContent = name;
+        //     headerActions.innerHTML = `
+        //         <button class="action-button" onclick="openStreamManagement()">
+        //             <i class="fas fa-users"></i>
+        //         </button>
+        //     `;
+            
+        //     chatScreen.classList.add('show');
+        //     loadDummyMessages();
+        // }
+
+        // function goBack() {
+        //     document.getElementById('chatScreen').classList.remove('show');
+        //     state.currentChat = null;
+        //     state.currentStream = null;
+        // }
+
+        // Dialog Management
+        // function openDialog(dialogId) {
+        //     document.getElementById(dialogId).classList.add('show');
+        // }
+
+        // function closeDialog(dialogId) {
+        //     document.getElementById(dialogId).classList.remove('show');
+        // }
+
+        // function showStatus(title, message) {
+        //     document.getElementById('statusTitle').textContent = title;
+        //     document.getElementById('statusMessage').textContent = message;
+        //     openDialog('statusDialog');
+        // }
+
+        // Contact Management
+        // function addContact() {
+        //     const input = document.querySelector('#addContactDialog .dialog-input');
+        //     const username = input.value.trim();
+            
+        //     if (username) {
+        //         closeDialog('addContactDialog');
+        //         showStatus('Invitation sent', `Contact request sent to ${username}`);
+        //         input.value = '';
+        //     }
+        // }
+
+        // Stream Management
+        // function createStream() {
+        //     const input = document.querySelector('#addStreamDialog .dialog-input');
+        //     const streamName = input.value.trim();
+            
+        //     if (streamName) {
+        //         state.dummyStreams.push({ id: Date.now(), name: streamName });
+        //         renderStreams();
+        //         closeDialog('addStreamDialog');
+        //         showStatus('Stream created', 'Stream created successfully');
+        //         input.value = '';
+        //     }
+        // }
+
+        function openStreamManagement() {
+            const membersList = document.getElementById('streamMembersList');
+            membersList.innerHTML = state.dummyContacts.map(contact => `
+                <div class="member-item">
+                    <div class="member-avatar">${getInitials(contact.name)}</div>
+                    <div class="member-info">${contact.name}</div>
+                    <button class="remove-member" onclick="removeMember('${contact.name}')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `).join('');
+            
+            openDialog('streamManagementDialog');
+        }
+
+        function openAddMemberDialog() {
+            closeDialog('streamManagementDialog');
+            openDialog('addMemberDialog');
+        }
+
+        function addMemberToStream() {
+            const input = document.querySelector('#addMemberDialog .dialog-input');
+            const username = input.value.trim();
+            
+            if (username) {
+                // In real app, would add member to stream
+                closeDialog('addMemberDialog');
+                openStreamManagement(); // Reopen the members list
+                showStatus('Member Added', `${username} has been added to the stream`);
+                input.value = '';
+            }
+        }
+
+        function removeMember(name) {
+            // In real app, would remove member from stream
+            showStatus('Member Removed', `${name} has been removed from the stream`);
+        }
+
+        // Utility Functions
+        // function getInitials(name) {
+        //     return name
+        //         .split(' ')
+        //         .map(word => word[0])
+        //         .join('')
+        //         .toUpperCase();
+        // }
+
+        // function loadDummyMessages() {
+        //     const messages = document.getElementById('messages');
+        //     messages.innerHTML = `
+        //         <div class="message received">How is it going?</div>
+        //         <div class="message sent">How is it going?</div>
+        //         <div class="message received">
+        //             <div>Saurabh kumar sent you one image</div>
+        //             <div class="file-message">
+        //                 <img src="/api/placeholder/100/100" alt="File preview" style="max-width: 100px;">
+        //                 <div class="file-actions">
+        //                     <button class="file-button">Preview</button>
+        //                     <button class="file-button">Download</button>
+        //                 </div>
+        //             </div>
+        //         </div>
+        //     `;
+        // }
+
+        // Message Functions
+        // document.querySelector('.message-input').addEventListener('keypress', (e) => {
+        //     if (e.key === 'Enter') {
+        //         sendMessage();
+        //     }
+        // });
+
+        // document.querySelector('.fa-paper-plane').parentElement.addEventListener('click', sendMessage);
+
+        // function sendMessage() {
+        //     const input = document.querySelector('.message-input');
+        //     const message = input.value.trim();
+            
+        //     if (message) {
+        //         const messages = document.getElementById('messages');
+        //         const messageDiv = document.createElement('div');
+        //         messageDiv.className = 'message sent';
+        //         messageDiv.textContent = message;
+        //         messages.appendChild(messageDiv);
                 
-                sidebar.classList.add('hidden-mobile');
-                chatRoom.classList.add('visible-mobile');
-                backButton.classList.remove('hidden');
-                
-                // Focus on message input if it exists
-                const messageInput = document.getElementById('messageInput');
-                if (messageInput) {
-                    setTimeout(() => messageInput.focus(), 300);
-                }
-            }
-        }
-
-        function showSidebarOnMobile() {
-            if (isMobile()) {
-                const sidebar = document.getElementById('sidebar');
-                const chatRoom = document.getElementById('chatRoom');
-                const backButton = document.getElementById('backButton');
-                
-                sidebar.classList.remove('hidden-mobile');
-                chatRoom.classList.remove('visible-mobile');
-                backButton.classList.add('hidden');
-            }
-        }
-
-        document.getElementById('contactsList').addEventListener('click', (e) => {
-            if (e.target.classList.contains('contact')) {
-                showChatRoom();
-                showChatOnMobile();
-            }
-        });
-
-        document.getElementById('groupsList').addEventListener('click', (e) => {
-            if (e.target.classList.contains('group')) {
-                showGroupRoom();
-                showChatOnMobile();
-            }
-        });
-
-        document.getElementById('backButton').addEventListener('click', showSidebarOnMobile);
-
-        window.addEventListener('resize', () => {
-            if (!isMobile()) {
-                const sidebar = document.getElementById('sidebar');
-                const chatRoom = document.getElementById('chatRoom');
-                const backButton = document.getElementById('backButton');
-                
-                sidebar.classList.remove('hidden-mobile');
-                chatRoom.classList.remove('visible-mobile');
-                backButton.classList.add('hidden');
-            }
-        });
-
-        function showCustomAlert(message) {
-            return new Promise((resolve) => {
-                const alertBox = document.getElementById('customAlert');
-                const alertMessage = document.getElementById('alertMessage');
-                const okButton = document.getElementById('alertOk');
-
-                alertMessage.textContent = message;
-                alertBox.classList.remove('hidden');
-                alertBox.classList.add('fade-in');
-
-                const closeAlert = () => {
-                    alertBox.classList.add('fade-out');
-                    setTimeout(() => {
-                        alertBox.classList.add('hidden');
-                        alertBox.classList.remove('fade-out');
-                        resolve();
-                    }, 300);
-                    okButton.removeEventListener('click', closeAlert);
-                };
-
-                okButton.addEventListener('click', closeAlert);
-            });
-        }
-
-        function showCustomConfirm(message) {
-            return new Promise((resolve) => {
-                const confirmBox = document.getElementById('customPrompt');
-                const confirmMessage = document.getElementById('promptMessage');
-                const inputSection = document.getElementById('promptInput');
-                const acceptButton = document.getElementById('promptOk');
-                const rejectButton = document.getElementById('promptCancel');
-
-                // Hide input field since it's a confirm dialog
-                inputSection.style.display = 'none';
-                
-                // Change button text
-                acceptButton.textContent = 'Accept';
-                rejectButton.textContent = 'Reject';
-                
-                confirmMessage.textContent = message;
-                confirmBox.classList.remove('hidden');
-                confirmBox.classList.add('fade-in');
-
-                const closeConfirm = (result) => {
-                    confirmBox.classList.add('fade-out');
-                    setTimeout(() => {
-                        confirmBox.classList.add('hidden');
-                        confirmBox.classList.remove('fade-out');
-                        // Reset input display and button text for future use
-                        inputSection.style.display = 'block';
-                        acceptButton.textContent = 'OK';
-                        rejectButton.textContent = 'Cancel';
-                        resolve(result);
-                    }, 300);
-                    acceptButton.removeEventListener('click', handleAccept);
-                    rejectButton.removeEventListener('click', handleReject);
-                };
-
-                const handleAccept = () => closeConfirm(true);
-                const handleReject = () => closeConfirm(false);
-
-                acceptButton.addEventListener('click', handleAccept);
-                rejectButton.addEventListener('click', handleReject);
-            });
-        }
+        //         input.value = '';
+        //         messages.scrollTop = messages.scrollHeight;
+        //     }
+        // }
     </script>
+    <script src="app.js"></script>
 </body>
-
 </html>
