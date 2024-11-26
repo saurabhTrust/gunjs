@@ -848,11 +848,53 @@ async function endCall() {
 }
 
 
+// function handleTrack(event) {
+//   console.log('Received remote track:', event.track.kind);
+  
+//   if (event.track.kind === 'audio') {
+//       // Create audio element if it doesn't exist
+//       let remoteAudio = document.getElementById('remoteAudio');
+//       if (!remoteAudio) {
+//           remoteAudio = document.createElement('audio');
+//           remoteAudio.id = 'remoteAudio';
+//           remoteAudio.autoplay = true;
+//           document.body.appendChild(remoteAudio);
+//       }
+//       remoteAudio.srcObject = event.streams[0];
+//   } 
+  
+//   if (event.track.kind === 'video') {
+//       const remoteVideo = document.getElementById('remoteVideo');
+//       if (remoteVideo) {
+//           console.log('Setting remote video stream');
+//           remoteVideo.srcObject = event.streams[0];
+          
+//           // Ensure the video is visible
+//           const videoContainer = document.querySelector('.video-content');
+//           if (videoContainer) {
+//               videoContainer.style.display = 'block';
+//           }
+
+//           // Log video track status
+//           event.track.onmute = () => console.log('Remote video track muted');
+//           event.track.onunmute = () => console.log('Remote video track unmuted');
+//           event.track.onended = () => console.log('Remote video track ended');
+
+//           // Monitor video element status
+//           remoteVideo.onloadedmetadata = () => console.log('Remote video metadata loaded');
+//           remoteVideo.onplay = () => console.log('Remote video playing');
+//           remoteVideo.onpause = () => console.log('Remote video paused');
+//           remoteVideo.onerror = (e) => console.error('Remote video error:', e);
+//       } else {
+//           console.error('Remote video element not found');
+//       }
+//   }
+// }
+
 function handleTrack(event) {
   console.log('Received remote track:', event.track.kind);
   
   if (event.track.kind === 'audio') {
-      // Create audio element if it doesn't exist
       let remoteAudio = document.getElementById('remoteAudio');
       if (!remoteAudio) {
           remoteAudio = document.createElement('audio');
@@ -869,24 +911,10 @@ function handleTrack(event) {
           console.log('Setting remote video stream');
           remoteVideo.srcObject = event.streams[0];
           
-          // Ensure the video is visible
-          const videoContainer = document.querySelector('.video-content');
-          if (videoContainer) {
-              videoContainer.style.display = 'block';
-          }
-
-          // Log video track status
+          // Log video track status for debugging
           event.track.onmute = () => console.log('Remote video track muted');
           event.track.onunmute = () => console.log('Remote video track unmuted');
           event.track.onended = () => console.log('Remote video track ended');
-
-          // Monitor video element status
-          remoteVideo.onloadedmetadata = () => console.log('Remote video metadata loaded');
-          remoteVideo.onplay = () => console.log('Remote video playing');
-          remoteVideo.onpause = () => console.log('Remote video paused');
-          remoteVideo.onerror = (e) => console.error('Remote video error:', e);
-      } else {
-          console.error('Remote video element not found');
       }
   }
 }
@@ -1987,6 +2015,89 @@ function onCallConnected() {
 }
 
 
+// async function startCall(withVideo = false) {
+//   if (isCallInProgress || currentChatType !== 'direct') {
+//       await showCustomAlert('A call is already in progress or you\'re not in a direct chat.');
+//       return;
+//   }
+
+//   try {
+//       isCallInProgress = true;
+//       isVideoCall = withVideo;
+      
+//       // Get media stream with explicit video constraints
+//       const mediaConstraints = { 
+//           audio: true, 
+//           video: withVideo ? {
+//               width: { ideal: 1280 },
+//               height: { ideal: 720 }
+//           } : false 
+//       };
+      
+//       localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+//       console.log('Local stream tracks:', localStream.getTracks());
+
+//       // Create call screen first
+//       createCallScreen(withVideo);
+      
+//       if (withVideo) {
+//           const localVideo = document.getElementById('localVideo');
+//           if (localVideo) {
+//               localVideo.srcObject = localStream;
+//           }
+//       }
+
+//       // Create peer connection and add tracks
+//       peerConnection = await webrtcHandler.createPeerConnection();
+
+//             // Add tracks to peer connection
+//             localStream.getTracks().forEach(track => {
+//               peerConnection.addTrack(track, localStream);
+//           });
+          
+//           // Create and set local description
+//           const offer = await peerConnection.createOffer({
+//               offerToReceiveAudio: true,
+//               offerToReceiveVideo: withVideo
+//           });
+//           await peerConnection.setLocalDescription(offer);
+          
+//           const callId = Date.now().toString();
+//           currentCall = {
+//               id: callId,
+//               to: currentChat,
+//               from: user.is.alias,
+//               startTime: Date.now(),
+//               isVideo: withVideo
+//           };
+    
+//           // Send call data
+//           const callData = {
+//               type: 'offer',
+//               callId: callId,
+//               from: user.is.alias,
+//               to: currentChat,
+//               offerType: offer.type,
+//               offerSdp: offer.sdp,
+//               startTime: currentCall.startTime,
+//               isVideo: withVideo,
+//               status: 'connecting'
+//           };
+    
+//           await new Promise((resolve, reject) => {
+//               gun.get('calls').get(callId).put(callData, (ack) => {
+//                   if (ack.err) reject(new Error(ack.err));
+//                   else resolve();
+//               });
+//           });
+      
+//   } catch (error) {
+//       console.error('Error in startCall:', error);
+//       await showCustomAlert('Error starting call: ' + error.message);
+//       await endCall();
+//   }
+// }
+
 async function startCall(withVideo = false) {
   if (isCallInProgress || currentChatType !== 'direct') {
       await showCustomAlert('A call is already in progress or you\'re not in a direct chat.');
@@ -2021,30 +2132,32 @@ async function startCall(withVideo = false) {
 
       // Create peer connection and add tracks
       peerConnection = await webrtcHandler.createPeerConnection();
+      
+      // Add all tracks to peer connection
+      localStream.getTracks().forEach(track => {
+          console.log('Adding track to peer connection:', track.kind);
+          peerConnection.addTrack(track, localStream);
+      });
 
-            // Add tracks to peer connection
-            localStream.getTracks().forEach(track => {
-              peerConnection.addTrack(track, localStream);
-          });
-          
-          // Create and set local description
-          const offer = await peerConnection.createOffer({
-              offerToReceiveAudio: true,
-              offerToReceiveVideo: withVideo
-          });
-          await peerConnection.setLocalDescription(offer);
-          
-          const callId = Date.now().toString();
-          currentCall = {
-              id: callId,
-              to: currentChat,
-              from: user.is.alias,
-              startTime: Date.now(),
-              isVideo: withVideo
-          };
-    
-          // Send call data
-          const callData = {
+      // Create and set local description
+      const offer = await peerConnection.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: withVideo
+      });
+      await peerConnection.setLocalDescription(offer);
+
+      const callId = Date.now().toString();
+      currentCall = {
+          id: callId,
+          to: currentChat,
+          from: user.is.alias,
+          startTime: Date.now(),
+          isVideo: withVideo
+      };
+
+      // Send call data
+      await new Promise((resolve, reject) => {
+          gun.get('calls').get(callId).put({
               type: 'offer',
               callId: callId,
               from: user.is.alias,
@@ -2054,15 +2167,12 @@ async function startCall(withVideo = false) {
               startTime: currentCall.startTime,
               isVideo: withVideo,
               status: 'connecting'
-          };
-    
-          await new Promise((resolve, reject) => {
-              gun.get('calls').get(callId).put(callData, (ack) => {
-                  if (ack.err) reject(new Error(ack.err));
-                  else resolve();
-              });
+          }, (ack) => {
+              if (ack.err) reject(new Error(ack.err));
+              else resolve();
           });
-      
+      });
+
   } catch (error) {
       console.error('Error in startCall:', error);
       await showCustomAlert('Error starting call: ' + error.message);
@@ -2082,43 +2192,155 @@ function monitorCallState(callId) {
   });
 }
 
+// async function handleIncomingCall(data) {
+//   if (isCallInProgress) {
+//       console.log('Already in a call, ignoring incoming call');
+//       return;
+//   }
+  
+//   const callType = data.isVideo ? 'video' : 'voice';
+//   const confirmed = confirm(`Incoming ${callType} call from ${data.from}. Accept?`);
+  
+//   if (confirmed) {
+//       try {
+//           isCallInProgress = true;
+//           isVideoCall = data.isVideo;
+//           const mediaConstraints = { audio: true, video: data.isVideo };
+//           localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+//           console.log('Local stream obtained:', localStream.getTracks());
+          
+//           // Create and show call screen
+//           createCallScreen(data.isVideo);
+//           //updateCallingStatus('Incomming...');
+//           // Update video elements if it's a video call
+//           if (data.isVideo) {
+//               const localVideo = document.getElementById('localVideo');
+//               if (localVideo) {
+//                   localVideo.srcObject = localStream;
+//               }
+//               //document.getElementById('videoContainer').classList.remove('hidden');
+//           }
+          
+//           peerConnection = await webrtcHandler.createPeerConnection();
+          
+//           const offer = {
+//               type: data.offerType,
+//               sdp: data.offerSdp
+//           };
+//           const answer = await webrtcHandler.handleIncomingCall(offer, localStream);
+          
+//           currentCall = {
+//               id: data.callId,
+//               to: data.from,
+//               from: user.is.alias,
+//               startTime: Date.now(),
+//               isVideo: data.isVideo
+//           };
+          
+//           const answerData = {
+//               type: 'answer',
+//               callId: data.callId,
+//               from: user.is.alias,
+//               to: data.from,
+//               answerType: answer.type,
+//               answerSdp: answer.sdp,
+//               time: currentCall.startTime,
+//               isVideo: data.isVideo
+//           };
+          
+//           gun.get(`calls`).get(data.callId).put(answerData);
+//           console.log('Answer sent:', answerData);
+//           setupICECandidateListener(data.callId);
+          
+//           // Start the call timer
+//           startTimer();
+          
+//           // Send buffered ICE candidates
+//           sendBufferedICECandidates(data.callId);
+          
+//           // Set a timeout to check if the call was established
+//           setTimeout(async () => {
+//               if (peerConnection && 
+//                   peerConnection.iceConnectionState !== 'connected' && 
+//                   peerConnection.iceConnectionState !== 'completed') {
+//                   console.log('Call setup timeout. Current ICE state:', peerConnection.iceConnectionState);
+//                   await showCustomAlert('Call setup timed out. Please try again.');
+//                   endCall();
+//               }
+//           }, 30000);  // 30 seconds timeout
+          
+//       } catch (error) {
+//           console.error('Error accepting call:', error);
+//           await showCustomAlert(`Error accepting call: ${error.message}`);
+//           endCall();
+//       }
+//   } else {
+//       gun.get(`calls`).get(data.callId).put({ 
+//           type: 'reject',
+//           from: user.is.alias,
+//           to: data.from,
+//           time: Date.now()
+//       });
+//   }
+// }
+
+
 async function handleIncomingCall(data) {
   if (isCallInProgress) {
       console.log('Already in a call, ignoring incoming call');
       return;
   }
-  
+
   const callType = data.isVideo ? 'video' : 'voice';
   const confirmed = confirm(`Incoming ${callType} call from ${data.from}. Accept?`);
-  
+
   if (confirmed) {
       try {
           isCallInProgress = true;
           isVideoCall = data.isVideo;
-          const mediaConstraints = { audio: true, video: data.isVideo };
+          
+          // Get media with proper constraints
+          const mediaConstraints = { 
+              audio: true, 
+              video: data.isVideo ? {
+                  width: { ideal: 1280 },
+                  height: { ideal: 720 }
+              } : false 
+          };
+          
           localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
           console.log('Local stream obtained:', localStream.getTracks());
-          
+
           // Create and show call screen
           createCallScreen(data.isVideo);
-          //updateCallingStatus('Incomming...');
-          // Update video elements if it's a video call
+
+          // Set up local video if this is a video call
           if (data.isVideo) {
               const localVideo = document.getElementById('localVideo');
               if (localVideo) {
                   localVideo.srcObject = localStream;
               }
-              //document.getElementById('videoContainer').classList.remove('hidden');
           }
-          
+
+          // Create peer connection
           peerConnection = await webrtcHandler.createPeerConnection();
-          
-          const offer = {
+
+          // Add all tracks
+          localStream.getTracks().forEach(track => {
+              console.log('Adding track to peer connection:', track.kind);
+              peerConnection.addTrack(track, localStream);
+          });
+
+          // Set remote description first
+          await peerConnection.setRemoteDescription(new RTCSessionDescription({
               type: data.offerType,
               sdp: data.offerSdp
-          };
-          const answer = await webrtcHandler.handleIncomingCall(offer, localStream);
-          
+          }));
+
+          // Create and set local description
+          const answer = await peerConnection.createAnswer();
+          await peerConnection.setLocalDescription(answer);
+
           currentCall = {
               id: data.callId,
               to: data.from,
@@ -2126,46 +2348,31 @@ async function handleIncomingCall(data) {
               startTime: Date.now(),
               isVideo: data.isVideo
           };
-          
-          const answerData = {
-              type: 'answer',
-              callId: data.callId,
-              from: user.is.alias,
-              to: data.from,
-              answerType: answer.type,
-              answerSdp: answer.sdp,
-              time: currentCall.startTime,
-              isVideo: data.isVideo
-          };
-          
-          gun.get(`calls`).get(data.callId).put(answerData);
-          console.log('Answer sent:', answerData);
+
+          // Send answer
+          await new Promise((resolve) => {
+              gun.get('calls').get(data.callId).put({
+                  type: 'answer',
+                  from: user.is.alias,
+                  to: data.from,
+                  answerType: answer.type,
+                  answerSdp: answer.sdp,
+                  time: Date.now(),
+                  status: 'accepted'
+              }, resolve);
+          });
+
           setupICECandidateListener(data.callId);
-          
-          // Start the call timer
-          startTimer();
-          
-          // Send buffered ICE candidates
           sendBufferedICECandidates(data.callId);
-          
-          // Set a timeout to check if the call was established
-          setTimeout(async () => {
-              if (peerConnection && 
-                  peerConnection.iceConnectionState !== 'connected' && 
-                  peerConnection.iceConnectionState !== 'completed') {
-                  console.log('Call setup timeout. Current ICE state:', peerConnection.iceConnectionState);
-                  await showCustomAlert('Call setup timed out. Please try again.');
-                  endCall();
-              }
-          }, 30000);  // 30 seconds timeout
-          
+          startTimer();
+
       } catch (error) {
           console.error('Error accepting call:', error);
           await showCustomAlert(`Error accepting call: ${error.message}`);
           endCall();
       }
   } else {
-      gun.get(`calls`).get(data.callId).put({ 
+      gun.get('calls').get(data.callId).put({ 
           type: 'reject',
           from: user.is.alias,
           to: data.from,
