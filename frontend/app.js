@@ -958,63 +958,37 @@ function sendIceCandidate(callId, candidate) {
 }
 
 
-// gun.on('auth', () => {
-//   gun.get(`calls`).map().on(async (data, key) => {
-//       if (!data || !data.to || data.to !== user.is.alias) return;
-      
-//       try {
-//           if (data.type === 'end') {
-//               endCall();
-//           } else if (data.type === 'ice' && peerConnection) {
-//               handleIncomingIceCandidate(key, data);
-//           } else if (data.type === 'offer' && !isCallInProgress && !isIncomingCall) {
-//               handleIncomingCall(data);
-//           } else if (data.type === 'answer' && peerConnection && !processingSignaling) {
-//               processingSignaling = true;
-//               try {
-//                   if (peerConnection.signalingState === 'have-local-offer') {
-//                       await peerConnection.setRemoteDescription(new RTCSessionDescription({
-//                           type: data.answerType,
-//                           sdp: data.answerSdp
-//                       }));
-//                       //startTimer();
-//                   }
-//               } catch (error) {
-//                   console.error('Error setting remote description:', error);
-//               } finally {
-//                   processingSignaling = false;
-//               }
-//           }
-//       } catch (error) {
-//           console.error('Error processing call event:', error);
-//           processingSignaling = false;
-//       }
-//   });
-// });
-
 gun.on('auth', () => {
-  console.log('User authenticated:', user.is.alias);
   gun.get(`calls`).map().on(async (data, key) => {
-    if (!data || !data.to || data.to !== user.is.alias) return;
-    
-    // console.log('Received call data:', data);
-    
-    if (data.type === 'ice') {
-      handleIncomingIceCandidate(key, data);
-    } else if (data.type === 'offer') {
-      handleIncomingCall(data);
-    } else if (data.type === 'answer' && peerConnection) {
+      if (!data || !data.to || data.to !== user.is.alias) return;
+      
       try {
-        await peerConnection.setRemoteDescription(new RTCSessionDescription({
-          type: data.answerType,
-          sdp: data.answerSdp
-        }));
+          if (data.type === 'end') {
+              endCall();
+          } else if (data.type === 'ice' && peerConnection) {
+              handleIncomingIceCandidate(key, data);
+          } else if (data.type === 'offer' && !isCallInProgress && !isIncomingCall) {
+              handleIncomingCall(data);
+          } else if (data.type === 'answer' && peerConnection && !processingSignaling) {
+              processingSignaling = true;
+              try {
+                  if (peerConnection.signalingState === 'have-local-offer') {
+                      await peerConnection.setRemoteDescription(new RTCSessionDescription({
+                          type: data.answerType,
+                          sdp: data.answerSdp
+                      }));
+                      //startTimer();
+                  }
+              } catch (error) {
+                  console.error('Error setting remote description:', error);
+              } finally {
+                  processingSignaling = false;
+              }
+          }
       } catch (error) {
-        console.error('Error setting remote description:', error);
+          console.error('Error processing call event:', error);
+          processingSignaling = false;
       }
-    } else if (data.type === 'end') {
-      endCall();
-    }
   });
 });
 
@@ -2138,10 +2112,7 @@ async function startCall(withVideo = false) {
       // Get media stream with explicit video constraints
       const mediaConstraints = { 
           audio: true, 
-          video: withVideo ? {
-              width: { ideal: 1280 },
-              height: { ideal: 720 }
-          } : false 
+          video: withVideo 
       };
       
       localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
@@ -2160,18 +2131,8 @@ async function startCall(withVideo = false) {
 
       // Create peer connection and add tracks
       peerConnection = await webrtcHandler.createPeerConnection();
-      
-      // Add all tracks to peer connection
-      localStream.getTracks().forEach(track => {
-          console.log('Adding track to peer connection:', track.kind);
-          peerConnection.addTrack(track, localStream);
-      });
+      const offer = await webrtcHandler.startCall(localStream);
 
-      // Create and set local description
-      const offer = await peerConnection.createOffer({
-          offerToReceiveAudio: true,
-          offerToReceiveVideo: withVideo
-      });
       console.log("offer", offer)
       await peerConnection.setLocalDescription(offer);
 
@@ -2183,6 +2144,7 @@ async function startCall(withVideo = false) {
           startTime: Date.now(),
           isVideo: withVideo
       };
+      setupICECandidateListener(callId);
 
       // Send call data
       await new Promise((resolve, reject) => {
@@ -2222,52 +2184,92 @@ function monitorCallState(callId) {
 }
 
 
-
 async function handleIncomingCall(data) {
   if (isCallInProgress) {
       console.log('Already in a call, ignoring incoming call');
       return;
   }
-
-  // Add detailed logging of incoming call data
-  console.log('Incoming call data:', {
-      isVideo: data.isVideo,
-      type: data.type,
-      from: data.from,
-      offerSdp: data.offerSdp ? 'present' : 'missing'
-  });
-
-  // Ensure isVideo is properly parsed as boolean if it's coming as string
-  const isVideoCall = Boolean(data.isVideo);
-  console.log('Parsed video call flag:', isVideoCall);
-
-  const callType = isVideoCall ? 'video' : 'voice';
-  console.log('Determined call type:', callType);
-
+  
+  const callType = data.isVideo ? 'video' : 'voice';
   const confirmed = confirm(`Incoming ${callType} call from ${data.from}. Accept?`);
-
+  
   if (confirmed) {
       try {
           isCallInProgress = true;
-          // Get media with proper constraints
-          const mediaConstraints = { 
-              audio: true, 
-              video: isVideoCall ? {  // Use the parsed boolean value
-                  width: { ideal: 1280 },
-                  height: { ideal: 720 }
-              } : false 
+          isVideoCall = data.isVideo;
+          const mediaConstraints = { audio: true, video: data.isVideo };
+          localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+          console.log('Local stream obtained:', localStream.getTracks());
+          
+          // Create and show call screen
+          createCallScreen(data.isVideo);
+          //updateCallingStatus('Incomming...');
+          // Update video elements if it's a video call
+          if (data.isVideo) {
+              const localVideo = document.getElementById('localVideo');
+              if (localVideo) {
+                  localVideo.srcObject = localStream;
+              }
+              //document.getElementById('videoContainer').classList.remove('hidden');
+          }
+          
+          peerConnection = await webrtcHandler.createPeerConnection();
+          
+          const offer = {
+              type: data.offerType,
+              sdp: data.offerSdp
+          };
+          await peerConnection.setRemoteDescription(offer);
+          const answer = await webrtcHandler.handleIncomingCall(offer, localStream);
+          
+          currentCall = {
+              id: data.callId,
+              to: data.from,
+              from: user.is.alias,
+              startTime: Date.now(),
+              isVideo: data.isVideo
           };
           
-          console.log('Using media constraints:', mediaConstraints);
-
-          // Rest of the function remains the same...
+          const answerData = {
+              type: 'answer',
+              callId: data.callId,
+              from: user.is.alias,
+              to: data.from,
+              answerType: answer.type,
+              answerSdp: answer.sdp,
+              time: currentCall.startTime,
+              isVideo: data.isVideo,
+              status: 'accepted'
+          };
+          
+          gun.get(`calls`).get(data.callId).put(answerData);
+          console.log('Answer sent:', answerData);
+          setupICECandidateListener(data.callId);
+          
+          // Start the call timer
+          startTimer();
+          
+          // Send buffered ICE candidates
+          sendBufferedICECandidates(data.callId);
+          
+          // Set a timeout to check if the call was established
+          setTimeout(async () => {
+              if (peerConnection && 
+                  peerConnection.iceConnectionState !== 'connected' && 
+                  peerConnection.iceConnectionState !== 'completed') {
+                  console.log('Call setup timeout. Current ICE state:', peerConnection.iceConnectionState);
+                  await showCustomAlert('Call setup timed out. Please try again.');
+                  endCall();
+              }
+          }, 30000);  // 30 seconds timeout
+          
       } catch (error) {
           console.error('Error accepting call:', error);
           await showCustomAlert(`Error accepting call: ${error.message}`);
           endCall();
       }
   } else {
-      gun.get('calls').get(data.callId).put({ 
+      gun.get(`calls`).get(data.callId).put({ 
           type: 'reject',
           from: user.is.alias,
           to: data.from,
@@ -2275,98 +2277,6 @@ async function handleIncomingCall(data) {
       });
   }
 }
-
-// async function handleIncomingCall(data) {
-//   if (isCallInProgress) {
-//       console.log('Already in a call, ignoring incoming call');
-//       return;
-//   }
-  
-//   const callType = data.isVideo ? 'video' : 'voice';
-//   const confirmed = confirm(`Incoming ${callType} call from ${data.from}. Accept?`);
-  
-//   if (confirmed) {
-//       try {
-//           isCallInProgress = true;
-//           isVideoCall = data.isVideo;
-//           const mediaConstraints = { audio: true, video: data.isVideo };
-//           localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-//           console.log('Local stream obtained:', localStream.getTracks());
-          
-//           // Create and show call screen
-//           createCallScreen(data.isVideo);
-//           //updateCallingStatus('Incomming...');
-//           // Update video elements if it's a video call
-//           if (data.isVideo) {
-//               const localVideo = document.getElementById('localVideo');
-//               if (localVideo) {
-//                   localVideo.srcObject = localStream;
-//               }
-//               //document.getElementById('videoContainer').classList.remove('hidden');
-//           }
-          
-//           peerConnection = await webrtcHandler.createPeerConnection();
-          
-//           const offer = {
-//               type: data.offerType,
-//               sdp: data.offerSdp
-//           };
-//           const answer = await webrtcHandler.handleIncomingCall(offer, localStream);
-          
-//           currentCall = {
-//               id: data.callId,
-//               to: data.from,
-//               from: user.is.alias,
-//               startTime: Date.now(),
-//               isVideo: data.isVideo
-//           };
-          
-//           const answerData = {
-//               type: 'answer',
-//               callId: data.callId,
-//               from: user.is.alias,
-//               to: data.from,
-//               answerType: answer.type,
-//               answerSdp: answer.sdp,
-//               time: currentCall.startTime,
-//               isVideo: data.isVideo
-//           };
-          
-//           gun.get(`calls`).get(data.callId).put(answerData);
-//           console.log('Answer sent:', answerData);
-//           setupICECandidateListener(data.callId);
-          
-//           // Start the call timer
-//           startTimer();
-          
-//           // Send buffered ICE candidates
-//           sendBufferedICECandidates(data.callId);
-          
-//           // Set a timeout to check if the call was established
-//           setTimeout(async () => {
-//               if (peerConnection && 
-//                   peerConnection.iceConnectionState !== 'connected' && 
-//                   peerConnection.iceConnectionState !== 'completed') {
-//                   console.log('Call setup timeout. Current ICE state:', peerConnection.iceConnectionState);
-//                   await showCustomAlert('Call setup timed out. Please try again.');
-//                   endCall();
-//               }
-//           }, 30000);  // 30 seconds timeout
-          
-//       } catch (error) {
-//           console.error('Error accepting call:', error);
-//           await showCustomAlert(`Error accepting call: ${error.message}`);
-//           endCall();
-//       }
-//   } else {
-//       gun.get(`calls`).get(data.callId).put({ 
-//           type: 'reject',
-//           from: user.is.alias,
-//           to: data.from,
-//           time: Date.now()
-//       });
-//   }
-// }
 
 
 // async function handleIncomingCall(data) {
