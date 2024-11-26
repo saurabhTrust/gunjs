@@ -2098,6 +2098,101 @@ function onCallConnected() {
 //   }
 // }
 
+// async function startCall(withVideo = false) {
+//   if (isCallInProgress || currentChatType !== 'direct') {
+//       await showCustomAlert('A call is already in progress or you\'re not in a direct chat.');
+//       return;
+//   }
+
+//   try {
+//       isCallInProgress = true;
+//       isVideoCall = withVideo;
+      
+//       // Get media stream with explicit video constraints
+//       const mediaConstraints = { 
+//           audio: true, 
+//           video: withVideo ? {
+//               width: { ideal: 1280 },
+//               height: { ideal: 720 }
+//           } : false 
+//       };
+      
+//       localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+//       console.log('Local stream tracks:', localStream.getTracks());
+
+//       // Create call screen first
+//       createCallScreen(withVideo);
+      
+//       if (withVideo) {
+//           const localVideo = document.getElementById('localVideo');
+//           if (localVideo) {
+//               localVideo.srcObject = localStream;
+//           }
+//       }
+
+//       // Create peer connection and add tracks
+//       peerConnection = await webrtcHandler.createPeerConnection();
+      
+//       // Add all tracks to peer connection
+//       localStream.getTracks().forEach(track => {
+//           console.log('Adding track to peer connection:', track.kind);
+//           peerConnection.addTrack(track, localStream);
+//       });
+
+//       // Create and set local description
+//       const offer = await peerConnection.createOffer({
+//           offerToReceiveAudio: true,
+//           offerToReceiveVideo: withVideo
+//       });
+//       await peerConnection.setLocalDescription(offer);
+
+//       const callId = Date.now().toString();
+//       currentCall = {
+//           id: callId,
+//           to: currentChat,
+//           from: user.is.alias,
+//           startTime: Date.now(),
+//           isVideo: withVideo
+//       };
+
+//       // Send call data
+//       await new Promise((resolve, reject) => {
+//           gun.get('calls').get(callId).put({
+//               type: 'offer',
+//               callId: callId,
+//               from: user.is.alias,
+//               to: currentChat,
+//               offerType: offer.type,
+//               offerSdp: offer.sdp,
+//               startTime: currentCall.startTime,
+//               isVideo: withVideo,
+//               status: 'connecting'
+//           }, (ack) => {
+//               if (ack.err) reject(new Error(ack.err));
+//               else resolve();
+//           });
+//       });
+
+//   } catch (error) {
+//       console.error('Error in startCall:', error);
+//       await showCustomAlert('Error starting call: ' + error.message);
+//       await endCall();
+//   }
+// }
+
+function monitorCallState(callId) {
+  return new Promise((resolve) => {
+    const unsubscribe = gun.get('calls').get(callId).on((data) => {
+      console.log('Call state updated:', data);
+      if (data?.status === 'accepted' || data?.status === 'rejected') {
+        unsubscribe();
+        resolve(data.status);
+      }
+    });
+  });
+}
+
+
 async function startCall(withVideo = false) {
   if (isCallInProgress || currentChatType !== 'direct') {
       await showCustomAlert('A call is already in progress or you\'re not in a direct chat.');
@@ -2106,7 +2201,7 @@ async function startCall(withVideo = false) {
 
   try {
       isCallInProgress = true;
-      isVideoCall = withVideo;
+      isVideoCall = withVideo;  // Ensure this is set correctly
       
       // Get media stream with explicit video constraints
       const mediaConstraints = { 
@@ -2119,43 +2214,19 @@ async function startCall(withVideo = false) {
       
       localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
       console.log('Local stream tracks:', localStream.getTracks());
+      console.log('Video call flag:', withVideo); // Add logging
 
-      // Create call screen first
-      createCallScreen(withVideo);
-      
-      if (withVideo) {
-          const localVideo = document.getElementById('localVideo');
-          if (localVideo) {
-              localVideo.srcObject = localStream;
-          }
-      }
-
-      // Create peer connection and add tracks
-      peerConnection = await webrtcHandler.createPeerConnection();
-      
-      // Add all tracks to peer connection
-      localStream.getTracks().forEach(track => {
-          console.log('Adding track to peer connection:', track.kind);
-          peerConnection.addTrack(track, localStream);
-      });
-
-      // Create and set local description
-      const offer = await peerConnection.createOffer({
-          offerToReceiveAudio: true,
-          offerToReceiveVideo: withVideo
-      });
-      await peerConnection.setLocalDescription(offer);
-
+      // When sending the call data, ensure isVideo is explicitly set
       const callId = Date.now().toString();
       currentCall = {
           id: callId,
           to: currentChat,
           from: user.is.alias,
           startTime: Date.now(),
-          isVideo: withVideo
+          isVideo: withVideo  // Make sure this is set correctly
       };
 
-      // Send call data
+      // Send call data with explicit video flag
       await new Promise((resolve, reject) => {
           gun.get('calls').get(callId).put({
               type: 'offer',
@@ -2165,7 +2236,7 @@ async function startCall(withVideo = false) {
               offerType: offer.type,
               offerSdp: offer.sdp,
               startTime: currentCall.startTime,
-              isVideo: withVideo,
+              isVideo: withVideo,  // Ensure this is explicitly set
               status: 'connecting'
           }, (ack) => {
               if (ack.err) reject(new Error(ack.err));
@@ -2180,16 +2251,59 @@ async function startCall(withVideo = false) {
   }
 }
 
-function monitorCallState(callId) {
-  return new Promise((resolve) => {
-    const unsubscribe = gun.get('calls').get(callId).on((data) => {
-      console.log('Call state updated:', data);
-      if (data?.status === 'accepted' || data?.status === 'rejected') {
-        unsubscribe();
-        resolve(data.status);
-      }
-    });
+async function handleIncomingCall(data) {
+  if (isCallInProgress) {
+      console.log('Already in a call, ignoring incoming call');
+      return;
+  }
+
+  // Add detailed logging of incoming call data
+  console.log('Incoming call data:', {
+      isVideo: data.isVideo,
+      type: data.type,
+      from: data.from,
+      offerSdp: data.offerSdp ? 'present' : 'missing'
   });
+
+  // Ensure isVideo is properly parsed as boolean if it's coming as string
+  const isVideoCall = Boolean(data.isVideo);
+  console.log('Parsed video call flag:', isVideoCall);
+
+  const callType = isVideoCall ? 'video' : 'voice';
+  console.log('Determined call type:', callType);
+
+  const confirmed = confirm(`Incoming ${callType} call from ${data.from}. Accept?`);
+
+  if (confirmed) {
+      try {
+          isCallInProgress = true;
+          isVideoCall = isVideoCall;  // Use the parsed boolean value
+          
+          // Get media with proper constraints
+          const mediaConstraints = { 
+              audio: true, 
+              video: isVideoCall ? {  // Use the parsed boolean value
+                  width: { ideal: 1280 },
+                  height: { ideal: 720 }
+              } : false 
+          };
+          
+          console.log('Using media constraints:', mediaConstraints);
+
+          // Rest of the function remains the same...
+      } catch (error) {
+          console.error('Error accepting call:', error);
+          await showCustomAlert(`Error accepting call: ${error.message}`);
+          endCall();
+      }
+  } else {
+      gun.get('calls').get(data.callId).put({ 
+          type: 'reject',
+          from: user.is.alias,
+          to: data.from,
+          time: Date.now()
+      });
+  }
 }
 
 // async function handleIncomingCall(data) {
@@ -2285,101 +2399,102 @@ function monitorCallState(callId) {
 // }
 
 
-async function handleIncomingCall(data) {
-  if (isCallInProgress) {
-      console.log('Already in a call, ignoring incoming call');
-      return;
-  }
+// async function handleIncomingCall(data) {
+//   if (isCallInProgress) {
+//       console.log('Already in a call, ignoring incoming call');
+//       return;
+//   }
 
-  const callType = data.isVideo ? 'video' : 'voice';
-  const confirmed = confirm(`Incoming ${callType} call from ${data.from}. Accept?`);
+//   const callType = data.isVideo ? 'video' : 'voice';
+//   alert(callType)
+//   const confirmed = confirm(`Incoming ${callType} call from ${data.from}. Accept?`);
 
-  if (confirmed) {
-      try {
-          isCallInProgress = true;
-          isVideoCall = data.isVideo;
+//   if (confirmed) {
+//       try {
+//           isCallInProgress = true;
+//           isVideoCall = data.isVideo;
           
-          // Get media with proper constraints
-          const mediaConstraints = { 
-              audio: true, 
-              video: data.isVideo ? {
-                  width: { ideal: 1280 },
-                  height: { ideal: 720 }
-              } : false 
-          };
+//           // Get media with proper constraints
+//           const mediaConstraints = { 
+//               audio: true, 
+//               video: data.isVideo ? {
+//                   width: { ideal: 1280 },
+//                   height: { ideal: 720 }
+//               } : false 
+//           };
           
-          localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-          console.log('Local stream obtained:', localStream.getTracks());
+//           localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+//           console.log('Local stream obtained:', localStream.getTracks());
 
-          // Create and show call screen
-          createCallScreen(data.isVideo);
+//           // Create and show call screen
+//           createCallScreen(data.isVideo);
 
-          // Set up local video if this is a video call
-          if (data.isVideo) {
-              const localVideo = document.getElementById('localVideo');
-              if (localVideo) {
-                  localVideo.srcObject = localStream;
-              }
-          }
+//           // Set up local video if this is a video call
+//           if (data.isVideo) {
+//               const localVideo = document.getElementById('localVideo');
+//               if (localVideo) {
+//                   localVideo.srcObject = localStream;
+//               }
+//           }
 
-          // Create peer connection
-          peerConnection = await webrtcHandler.createPeerConnection();
+//           // Create peer connection
+//           peerConnection = await webrtcHandler.createPeerConnection();
 
-          // Add all tracks
-          localStream.getTracks().forEach(track => {
-              console.log('Adding track to peer connection:', track.kind);
-              peerConnection.addTrack(track, localStream);
-          });
+//           // Add all tracks
+//           localStream.getTracks().forEach(track => {
+//               console.log('Adding track to peer connection:', track.kind);
+//               peerConnection.addTrack(track, localStream);
+//           });
 
-          // Set remote description first
-          await peerConnection.setRemoteDescription(new RTCSessionDescription({
-              type: data.offerType,
-              sdp: data.offerSdp
-          }));
+//           // Set remote description first
+//           await peerConnection.setRemoteDescription(new RTCSessionDescription({
+//               type: data.offerType,
+//               sdp: data.offerSdp
+//           }));
 
-          // Create and set local description
-          const answer = await peerConnection.createAnswer();
-          await peerConnection.setLocalDescription(answer);
+//           // Create and set local description
+//           const answer = await peerConnection.createAnswer();
+//           await peerConnection.setLocalDescription(answer);
 
-          currentCall = {
-              id: data.callId,
-              to: data.from,
-              from: user.is.alias,
-              startTime: Date.now(),
-              isVideo: data.isVideo
-          };
+//           currentCall = {
+//               id: data.callId,
+//               to: data.from,
+//               from: user.is.alias,
+//               startTime: Date.now(),
+//               isVideo: data.isVideo
+//           };
 
-          // Send answer
-          await new Promise((resolve) => {
-              gun.get('calls').get(data.callId).put({
-                  type: 'answer',
-                  from: user.is.alias,
-                  to: data.from,
-                  answerType: answer.type,
-                  answerSdp: answer.sdp,
-                  time: Date.now(),
-                  status: 'accepted'
-              }, resolve);
-          });
+//           // Send answer
+//           await new Promise((resolve) => {
+//               gun.get('calls').get(data.callId).put({
+//                   type: 'answer',
+//                   from: user.is.alias,
+//                   to: data.from,
+//                   answerType: answer.type,
+//                   answerSdp: answer.sdp,
+//                   time: Date.now(),
+//                   status: 'accepted'
+//               }, resolve);
+//           });
 
-          setupICECandidateListener(data.callId);
-          sendBufferedICECandidates(data.callId);
-          startTimer();
+//           setupICECandidateListener(data.callId);
+//           sendBufferedICECandidates(data.callId);
+//           startTimer();
 
-      } catch (error) {
-          console.error('Error accepting call:', error);
-          await showCustomAlert(`Error accepting call: ${error.message}`);
-          endCall();
-      }
-  } else {
-      gun.get('calls').get(data.callId).put({ 
-          type: 'reject',
-          from: user.is.alias,
-          to: data.from,
-          time: Date.now()
-      });
-  }
-}
+//       } catch (error) {
+//           console.error('Error accepting call:', error);
+//           await showCustomAlert(`Error accepting call: ${error.message}`);
+//           endCall();
+//       }
+//   } else {
+//       gun.get('calls').get(data.callId).put({ 
+//           type: 'reject',
+//           from: user.is.alias,
+//           to: data.from,
+//           time: Date.now()
+//       });
+//   }
+// }
 
 function setupPeerConnectionListeners(peerConnection) {
   peerConnection.onsignalingstatechange = () => {
