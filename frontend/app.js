@@ -2221,7 +2221,7 @@ function checkWebRTCSetup() {
   const username = url.searchParams.get('username');
   let password = url.searchParams.get('password');
   if (username && password) {
-      //password += "Trus@"+password;
+      password += "Trus@"+password;
       try {
           await login(null, username.trim(), password.trim());
       } catch (err) {
