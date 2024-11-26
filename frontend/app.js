@@ -1885,7 +1885,7 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 
-function createCallScreen(isVideo = false) {
+function createCallScreen(isVideo = false, callee) {
   const callScreen = document.createElement('div');
   callScreen.id = 'callScreen';
   callScreen.className = 'chat-screen call-screen';
@@ -1900,9 +1900,9 @@ function createCallScreen(isVideo = false) {
       ` : `
           <div class="voice-content">
               <div class="avatar">
-                  ${getInitials(currentChat)}
+                  ${getInitials(callee)}
               </div>
-              <div class="caller-name">${currentChat}</div>
+              <div class="caller-name">${callee}</div>
               <div class="timer">00:00</div>
           </div>
       `}
@@ -2016,89 +2016,6 @@ function onCallConnected() {
 }
 
 
-// async function startCall(withVideo = false) {
-//   if (isCallInProgress || currentChatType !== 'direct') {
-//       await showCustomAlert('A call is already in progress or you\'re not in a direct chat.');
-//       return;
-//   }
-
-//   try {
-//       isCallInProgress = true;
-//       isVideoCall = withVideo;
-      
-//       // Get media stream with explicit video constraints
-//       const mediaConstraints = { 
-//           audio: true, 
-//           video: withVideo ? {
-//               width: { ideal: 1280 },
-//               height: { ideal: 720 }
-//           } : false 
-//       };
-      
-//       localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-//       console.log('Local stream tracks:', localStream.getTracks());
-
-//       // Create call screen first
-//       createCallScreen(withVideo);
-      
-//       if (withVideo) {
-//           const localVideo = document.getElementById('localVideo');
-//           if (localVideo) {
-//               localVideo.srcObject = localStream;
-//           }
-//       }
-
-//       // Create peer connection and add tracks
-//       peerConnection = await webrtcHandler.createPeerConnection();
-
-//             // Add tracks to peer connection
-//             localStream.getTracks().forEach(track => {
-//               peerConnection.addTrack(track, localStream);
-//           });
-          
-//           // Create and set local description
-//           const offer = await peerConnection.createOffer({
-//               offerToReceiveAudio: true,
-//               offerToReceiveVideo: withVideo
-//           });
-//           await peerConnection.setLocalDescription(offer);
-          
-//           const callId = Date.now().toString();
-//           currentCall = {
-//               id: callId,
-//               to: currentChat,
-//               from: user.is.alias,
-//               startTime: Date.now(),
-//               isVideo: withVideo
-//           };
-    
-//           // Send call data
-//           const callData = {
-//               type: 'offer',
-//               callId: callId,
-//               from: user.is.alias,
-//               to: currentChat,
-//               offerType: offer.type,
-//               offerSdp: offer.sdp,
-//               startTime: currentCall.startTime,
-//               isVideo: withVideo,
-//               status: 'connecting'
-//           };
-    
-//           await new Promise((resolve, reject) => {
-//               gun.get('calls').get(callId).put(callData, (ack) => {
-//                   if (ack.err) reject(new Error(ack.err));
-//                   else resolve();
-//               });
-//           });
-      
-//   } catch (error) {
-//       console.error('Error in startCall:', error);
-//       await showCustomAlert('Error starting call: ' + error.message);
-//       await endCall();
-//   }
-// }
-
 async function startCall(withVideo = false) {
   if (isCallInProgress || currentChatType !== 'direct') {
       await showCustomAlert('A call is already in progress or you\'re not in a direct chat.');
@@ -2198,6 +2115,11 @@ async function handleIncomingCall(data) {
   
   const callType = data.isVideo ? 'video' : 'voice';
   const confirmed = confirm(`Incoming ${callType} call from ${data.from}. Accept?`);
+
+  if (!confirmed) {
+    await rejectCall(data, 'declined');
+    return;
+  }
   
   if (confirmed) {
       try {
@@ -2209,7 +2131,7 @@ async function handleIncomingCall(data) {
           console.log('Local stream obtained:', localStream.getTracks());
           
           // Create and show call screen
-          createCallScreen(data.isVideo);
+          createCallScreen(data.isVideo, data.from);
           //updateCallingStatus('Incomming...');
           // Update video elements if it's a video call
           if (data.isVideo) {

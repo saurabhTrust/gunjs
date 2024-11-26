@@ -82,6 +82,12 @@
         .list-container {
             padding: 10px;
             display: none;
+            height: calc(100vh - 180px); /* Adjust based on your header/footer height */
+            overflow-y: auto;
+            position: relative;
+            padding: 10px;
+            scrollbar-width: thin; /* For Firefox */
+            scrollbar-color: rgba(0, 0, 0, 0.2) transparent; 
         }
 
         .list-container.active {
@@ -155,6 +161,7 @@
             padding: 15px;
             display: flex;
             flex-direction: column;
+            word-wrap: break-word;
         }
 
         .message {
