@@ -581,6 +581,7 @@ function initializeApp() {
       setupContactAcceptanceListener();
       setupGroupInvitationListener();
       setupTypingNotification();
+      setupSearch();
   }
 }
 
@@ -2334,4 +2335,26 @@ function toggleVideo() {
           videoButton.innerHTML = `<i class="fas fa-video${videoTrack.enabled ? '' : '-slash'}"></i>`;
       }
   }
+}
+
+function setupSearch() {
+  const searchBox = document.querySelector('.search-box');
+  searchBox.addEventListener('input', (e) => {
+      const searchTerm = e.target.value.toLowerCase();
+      const currentTab = state.currentView;
+      
+      if (currentTab === 'contacts') {
+          const contacts = document.querySelectorAll('#contactsList .contact-item');
+          contacts.forEach(contact => {
+              const name = contact.querySelector('.contact-name').textContent.toLowerCase();
+              contact.style.display = name.includes(searchTerm) ? 'flex' : 'none';
+          });
+      } else {
+          const streams = document.querySelectorAll('#streamsList .stream-item');
+          streams.forEach(stream => {
+              const name = stream.querySelector('.name').textContent.toLowerCase();
+              stream.style.display = name.includes(searchTerm) ? 'flex' : 'none';
+          });
+      }
+  });
 }
