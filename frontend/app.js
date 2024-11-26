@@ -958,39 +958,66 @@ function sendIceCandidate(callId, candidate) {
 }
 
 
-gun.on('auth', () => {
-  gun.get(`calls`).map().on(async (data, key) => {
-      if (!data || !data.to || data.to !== user.is.alias) return;
+// gun.on('auth', () => {
+//   gun.get(`calls`).map().on(async (data, key) => {
+//       if (!data || !data.to || data.to !== user.is.alias) return;
       
+//       try {
+//           if (data.type === 'end') {
+//               endCall();
+//           } else if (data.type === 'ice' && peerConnection) {
+//               handleIncomingIceCandidate(key, data);
+//           } else if (data.type === 'offer' && !isCallInProgress && !isIncomingCall) {
+//               handleIncomingCall(data);
+//           } else if (data.type === 'answer' && peerConnection && !processingSignaling) {
+//               processingSignaling = true;
+//               try {
+//                   if (peerConnection.signalingState === 'have-local-offer') {
+//                       await peerConnection.setRemoteDescription(new RTCSessionDescription({
+//                           type: data.answerType,
+//                           sdp: data.answerSdp
+//                       }));
+//                       //startTimer();
+//                   }
+//               } catch (error) {
+//                   console.error('Error setting remote description:', error);
+//               } finally {
+//                   processingSignaling = false;
+//               }
+//           }
+//       } catch (error) {
+//           console.error('Error processing call event:', error);
+//           processingSignaling = false;
+//       }
+//   });
+// });
+
+gun.on('auth', () => {
+  console.log('User authenticated:', user.is.alias);
+  gun.get(`calls`).map().on(async (data, key) => {
+    if (!data || !data.to || data.to !== user.is.alias) return;
+    
+    // console.log('Received call data:', data);
+    
+    if (data.type === 'ice') {
+      handleIncomingIceCandidate(key, data);
+    } else if (data.type === 'offer') {
+      handleIncomingCall(data);
+    } else if (data.type === 'answer' && peerConnection) {
       try {
-          if (data.type === 'end') {
-              endCall();
-          } else if (data.type === 'ice' && peerConnection) {
-              handleIncomingIceCandidate(key, data);
-          } else if (data.type === 'offer' && !isCallInProgress && !isIncomingCall) {
-              handleIncomingCall(data);
-          } else if (data.type === 'answer' && peerConnection && !processingSignaling) {
-              processingSignaling = true;
-              try {
-                  if (peerConnection.signalingState === 'have-local-offer') {
-                      await peerConnection.setRemoteDescription(new RTCSessionDescription({
-                          type: data.answerType,
-                          sdp: data.answerSdp
-                      }));
-                      //startTimer();
-                  }
-              } catch (error) {
-                  console.error('Error setting remote description:', error);
-              } finally {
-                  processingSignaling = false;
-              }
-          }
+        await peerConnection.setRemoteDescription(new RTCSessionDescription({
+          type: data.answerType,
+          sdp: data.answerSdp
+        }));
       } catch (error) {
-          console.error('Error processing call event:', error);
-          processingSignaling = false;
+        console.error('Error setting remote description:', error);
       }
+    } else if (data.type === 'end') {
+      endCall();
+    }
   });
 });
+
 
 function handleIncomingIceCandidate(callId, data) {
   if (data && data.ice) {
@@ -2222,8 +2249,6 @@ async function handleIncomingCall(data) {
   if (confirmed) {
       try {
           isCallInProgress = true;
-          isVideoCall = isVideoCall;  // Use the parsed boolean value
-          
           // Get media with proper constraints
           const mediaConstraints = { 
               audio: true, 
