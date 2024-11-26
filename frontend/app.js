@@ -1889,7 +1889,7 @@ function createCallScreen(isVideo = false, callee) {
   const callScreen = document.createElement('div');
   callScreen.id = 'callScreen';
   callScreen.className = 'chat-screen call-screen';
-  
+  const calleeName = callee ? callee : currentChat;
   callScreen.innerHTML = `
       ${isVideo ? `
           <div class="video-content">
@@ -1900,9 +1900,9 @@ function createCallScreen(isVideo = false, callee) {
       ` : `
           <div class="voice-content">
               <div class="avatar">
-                  ${getInitials(callee)}
+                  ${getInitials(calleeName)}
               </div>
-              <div class="caller-name">${callee}</div>
+              <div class="caller-name">${calleeName}</div>
               <div class="timer">00:00</div>
           </div>
       `}
