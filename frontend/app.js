@@ -2185,6 +2185,12 @@ function monitorCallState(callId) {
 
 
 async function handleIncomingCall(data) {
+  console.log(data);
+  if (!data || !data.callId) {
+    console.error('Invalid call data received:', data);
+    return;
+  }
+
   if (isCallInProgress) {
       console.log('Already in a call, ignoring incoming call');
       return;
@@ -2197,6 +2203,7 @@ async function handleIncomingCall(data) {
       try {
           isCallInProgress = true;
           isVideoCall = data.isVideo;
+
           const mediaConstraints = { audio: true, video: data.isVideo };
           localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
           console.log('Local stream obtained:', localStream.getTracks());
@@ -2229,21 +2236,19 @@ async function handleIncomingCall(data) {
               startTime: Date.now(),
               isVideo: data.isVideo
           };
-          
-          const answerData = {
+        
+          // Send answer
+          await new Promise((resolve) => {
+            gun.get('calls').get(data.callId).put({
               type: 'answer',
-              callId: data.callId,
               from: user.is.alias,
               to: data.from,
               answerType: answer.type,
               answerSdp: answer.sdp,
-              time: currentCall.startTime,
-              isVideo: data.isVideo,
+              time: Date.now(),
               status: 'accepted'
-          };
-          
-          gun.get(`calls`).get(data.callId).put(answerData);
-          console.log('Answer sent:', answerData);
+            }, resolve);
+          });
           setupICECandidateListener(data.callId);
           
           // Start the call timer
