@@ -848,49 +848,6 @@ async function endCall() {
 }
 
 
-// function handleTrack(event) {
-//   console.log('Received remote track:', event.track.kind);
-  
-//   if (event.track.kind === 'audio') {
-//       // Create audio element if it doesn't exist
-//       let remoteAudio = document.getElementById('remoteAudio');
-//       if (!remoteAudio) {
-//           remoteAudio = document.createElement('audio');
-//           remoteAudio.id = 'remoteAudio';
-//           remoteAudio.autoplay = true;
-//           document.body.appendChild(remoteAudio);
-//       }
-//       remoteAudio.srcObject = event.streams[0];
-//   } 
-  
-//   if (event.track.kind === 'video') {
-//       const remoteVideo = document.getElementById('remoteVideo');
-//       if (remoteVideo) {
-//           console.log('Setting remote video stream');
-//           remoteVideo.srcObject = event.streams[0];
-          
-//           // Ensure the video is visible
-//           const videoContainer = document.querySelector('.video-content');
-//           if (videoContainer) {
-//               videoContainer.style.display = 'block';
-//           }
-
-//           // Log video track status
-//           event.track.onmute = () => console.log('Remote video track muted');
-//           event.track.onunmute = () => console.log('Remote video track unmuted');
-//           event.track.onended = () => console.log('Remote video track ended');
-
-//           // Monitor video element status
-//           remoteVideo.onloadedmetadata = () => console.log('Remote video metadata loaded');
-//           remoteVideo.onplay = () => console.log('Remote video playing');
-//           remoteVideo.onpause = () => console.log('Remote video paused');
-//           remoteVideo.onerror = (e) => console.error('Remote video error:', e);
-//       } else {
-//           console.error('Remote video element not found');
-//       }
-//   }
-// }
-
 function handleTrack(event) {
   console.log('Received remote track:', event.track.kind);
   
@@ -977,7 +934,7 @@ gun.on('auth', () => {
                           type: data.answerType,
                           sdp: data.answerSdp
                       }));
-                      //startTimer();
+                      startTimer();
                   }
               } catch (error) {
                   console.error('Error setting remote description:', error);
@@ -1895,7 +1852,7 @@ function createCallScreen(isVideo = false, callee) {
           <div class="video-content">
               <video id="remoteVideo" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
               <video id="localVideo" autoplay muted playsinline style="position: absolute; bottom: 24px; right: 24px; width: 120px; height: 160px; border-radius: 12px; object-fit: cover;"></video>
-              <div class="timer">00:00</div>
+              <div class="timer" style="display: none;">00:00</div>
           </div>
       ` : `
           <div class="voice-content">
