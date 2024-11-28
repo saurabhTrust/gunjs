@@ -178,7 +178,11 @@ body {
     display: flex;
     flex-direction: column;
     word-wrap: break-word;
+    background-image: url('./images/logoblue.png');
+    background-position: center;
+    background-repeat: no-repeat;
 }
+
 
 .message {
     max-width: 80%;
@@ -691,7 +695,7 @@ color: var(--text-primary);
 }
 
 .expiry-button.cancel {
-background: var(--cream-bg);
+background: var(--cancel-bg);
 color: var(--bg-primary);
 }
 
