@@ -1116,10 +1116,9 @@ function showExpiryDialog() {
       dialog.className = 'expiry-dialog';
       dialog.innerHTML = `
           <h3>Set File Expiry Time</h3>
-          <div class="expiry-hint">Set how long the file will be available</div>
-          <input type="number" min="0" 
-                 class="expiry-input" 
-                 placeholder="Enter minutes (0 for no expiry)"
+          <div class="expiry-hint">Enter Expiry Date and time empty no expiry</div>
+          <input type="datetime-local" min="0" 
+                 class="expiry-input"
                  id="expiryInput">
           <div class="expiry-buttons">
               <button class="expiry-button cancel" id="cancelExpiry">Cancel</button>
@@ -1138,8 +1137,25 @@ function showExpiryDialog() {
           document.body.removeChild(dialog);
       }
 
+      function calculateMinutesDifference(expiryDateStr) {
+          if (!expiryDateStr) return 0;
+          
+          const expiryDate = new Date(expiryDateStr);
+          const currentDate = new Date();
+          
+          // Check if the date is valid and in the future
+          if (isNaN(expiryDate.getTime()) || expiryDate <= currentDate) {
+              return 0;
+          }
+          
+          // Calculate difference in milliseconds
+          const diffMs = expiryDate - currentDate;
+          // Convert to minutes and round up to nearest minute
+          return Math.ceil(diffMs / (1000 * 60));
+      }
+
       dialog.querySelector('#confirmExpiry').onclick = () => {
-          const minutes = parseInt(input.value) || 0;
+          const minutes = calculateMinutesDifference(input.value);
           cleanup();
           resolve(minutes);
       };
@@ -1151,7 +1167,7 @@ function showExpiryDialog() {
 
       input.onkeypress = (e) => {
           if (e.key === 'Enter') {
-              const minutes = parseInt(input.value) || 0;
+              const minutes = calculateMinutesDifference(input.value);
               cleanup();
               resolve(minutes);
           }
@@ -1199,6 +1215,7 @@ async function sendFile() {
   try {
       // Show expiry dialog
       const expiryMinutes = await showExpiryDialog();
+      console.log(expiryMinutes);
       if (expiryMinutes === null) {
           fileInput.value = '';
           return;
