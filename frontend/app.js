@@ -1,6 +1,6 @@
 const gun = Gun(['https://dcomm.dev.trustgrid.com/gun']);
 const IPFS_BACKEND_URL = 'https://ipfs-backend.uat.trustgrid.com';
-alert(window.location.href);
+// alert(window.location.href);
 // User state
 let user;
 let currentChat = null;
@@ -102,7 +102,7 @@ function login(e, loginUser, pass) {
         reject(new Error("Login Failed"))
       } else {
         console.log("User authenticated:", user.is.alias);
-        alert(user.is.alias);
+        showCustomAlert(user.is.alias);
         // Store/update the user's public data
         gun.get('users').get(username).put({ username: username });
         registerPushNotifications();
