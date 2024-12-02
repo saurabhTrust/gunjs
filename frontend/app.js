@@ -79,6 +79,7 @@ async function register(e, loginUser, pass) {
     user.create(username, password, (ack) => {
       if (ack.err) {
         console.log(ack.err);
+        showCustomAlert("Registration Failed " + ack.err);
         reject(new Error("registration Failed"));
       } else {
         // Store the user's public data
@@ -2201,7 +2202,7 @@ function checkWebRTCSetup() {
           await login(null, username.trim(), password.trim());
       } catch (err) {
           console.log(err);
-          alert(err);
+          showCustomAlert("User not found Creating new user");
           await register(null, username.trim(), password.trim());
           await login(null, username.trim(), password.trim());
       } 
