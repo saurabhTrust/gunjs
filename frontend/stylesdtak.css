@@ -154,9 +154,9 @@ body {
     display: flex;
     flex-direction: column;
     word-wrap: break-word;
-    background-image: url('./images/logobg1.png');
+    /* background-image: url('./images/logobg1.png');
     background-position: center;
-    background-repeat: no-repeat;
+    background-repeat: no-repeat; */
 }
 
 .message {

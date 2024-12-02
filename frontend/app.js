@@ -498,8 +498,6 @@ function goBack() {
 }
 
 
-
-
 function startChat(contactAlias) {
   clearChat();
   currentChat = contactAlias;
