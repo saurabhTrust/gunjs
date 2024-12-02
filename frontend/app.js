@@ -1,6 +1,6 @@
 const gun = Gun(['https://dcomm.dev.trustgrid.com/gun']);
 const IPFS_BACKEND_URL = 'https://ipfs-backend.uat.trustgrid.com';
-
+alert(window.location.href);
 // User state
 let user;
 let currentChat = null;
@@ -1076,37 +1076,6 @@ async function encryptAndUploadFile(file) {
   return JSON.stringify(data);
 }
 
-// async function showExpiryDialog() {
-//   const dialogHtml = `
-//     <div class="dialog-content">
-//       <p>Set file expiration time (in minutes)</p>
-//       <p>Enter 0 for no expiration</p>
-//       <input type="number" min="0" id="expiryInput" class="input-box-style" value="0">
-//       <div class="dialog-buttons">
-//         <button class="primary-button-style" id="confirmExpiry">Confirm</button>
-//         <button class="primary-button-style" id="cancelExpiry">Cancel</button>
-//       </div>
-//     </div>
-//   `;
-
-//   const dialog = document.createElement('div');
-//   dialog.className = 'custom-dialog';
-//   dialog.innerHTML = dialogHtml;
-//   document.body.appendChild(dialog);
-
-//   return new Promise((resolve) => {
-//     document.getElementById('confirmExpiry').onclick = () => {
-//       const minutes = parseInt(document.getElementById('expiryInput').value) || 0;
-//       document.body.removeChild(dialog);
-//       resolve(minutes);
-//     };
-//     document.getElementById('cancelExpiry').onclick = () => {
-//       document.body.removeChild(dialog);
-//       resolve(null);
-//     };
-//   });
-// }
-
 function showExpiryDialog() {
   return new Promise((resolve) => {
       const overlay = document.createElement('div');
@@ -2178,104 +2147,6 @@ async function handleIncomingCall(data) {
       });
   }
 }
-
-
-// async function handleIncomingCall(data) {
-//   if (isCallInProgress) {
-//       console.log('Already in a call, ignoring incoming call');
-//       return;
-//   }
-
-//   const callType = data.isVideo ? 'video' : 'voice';
-//   alert(callType)
-//   const confirmed = confirm(`Incoming ${callType} call from ${data.from}. Accept?`);
-
-//   if (confirmed) {
-//       try {
-//           isCallInProgress = true;
-//           isVideoCall = data.isVideo;
-          
-//           // Get media with proper constraints
-//           const mediaConstraints = { 
-//               audio: true, 
-//               video: data.isVideo ? {
-//                   width: { ideal: 1280 },
-//                   height: { ideal: 720 }
-//               } : false 
-//           };
-          
-//           localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-//           console.log('Local stream obtained:', localStream.getTracks());
-
-//           // Create and show call screen
-//           createCallScreen(data.isVideo);
-
-//           // Set up local video if this is a video call
-//           if (data.isVideo) {
-//               const localVideo = document.getElementById('localVideo');
-//               if (localVideo) {
-//                   localVideo.srcObject = localStream;
-//               }
-//           }
-
-//           // Create peer connection
-//           peerConnection = await webrtcHandler.createPeerConnection();
-
-//           // Add all tracks
-//           localStream.getTracks().forEach(track => {
-//               console.log('Adding track to peer connection:', track.kind);
-//               peerConnection.addTrack(track, localStream);
-//           });
-
-//           // Set remote description first
-//           await peerConnection.setRemoteDescription(new RTCSessionDescription({
-//               type: data.offerType,
-//               sdp: data.offerSdp
-//           }));
-
-//           // Create and set local description
-//           const answer = await peerConnection.createAnswer();
-//           await peerConnection.setLocalDescription(answer);
-
-//           currentCall = {
-//               id: data.callId,
-//               to: data.from,
-//               from: user.is.alias,
-//               startTime: Date.now(),
-//               isVideo: data.isVideo
-//           };
-
-//           // Send answer
-//           await new Promise((resolve) => {
-//               gun.get('calls').get(data.callId).put({
-//                   type: 'answer',
-//                   from: user.is.alias,
-//                   to: data.from,
-//                   answerType: answer.type,
-//                   answerSdp: answer.sdp,
-//                   time: Date.now(),
-//                   status: 'accepted'
-//               }, resolve);
-//           });
-
-//           setupICECandidateListener(data.callId);
-//           sendBufferedICECandidates(data.callId);
-//           startTimer();
-
-//       } catch (error) {
-//           console.error('Error accepting call:', error);
-//           await showCustomAlert(`Error accepting call: ${error.message}`);
-//           endCall();
-//       }
-//   } else {
-//       gun.get('calls').get(data.callId).put({ 
-//           type: 'reject',
-//           from: user.is.alias,
-//           to: data.from,
-//           time: Date.now()
-//       });
-//   }
-// }
 
 function setupPeerConnectionListeners(peerConnection) {
   peerConnection.onsignalingstatechange = () => {
