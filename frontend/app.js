@@ -102,7 +102,7 @@ function login(e, loginUser, pass) {
         reject(new Error("Login Failed"))
       } else {
         console.log("User authenticated:", user.is.alias);
-        showCustomAlert(user.is.alias);
+        showCustomAlert("Login in as " + user.is.alias);
         // Store/update the user's public data
         gun.get('users').get(username).put({ username: username });
         registerPushNotifications();
