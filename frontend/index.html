@@ -23,9 +23,41 @@
             document.head.appendChild(linkElement);
         }
         loadPlatformCSS();
+        setTimeout(() => {
+            const splashScreen = document.getElementById('splashScreen');
+            splashScreen.classList.add('hidden');
+            setTimeout(() => {
+                splashScreen.remove();
+            }, 1000);
+        }, 5000);
     </script>
 </head>
 <body>
+    <div class="splash-screen" id="splashScreen">
+        <div class="splash-logo">
+            <img src="./images/logobg1.png">
+        </div>
+        <div class="splash-title">
+            <p>TrustGrid's</p> 
+            <p>Decentralized</p> 
+            <p>ConnectHub</p>
+        </div>
+        <div class="splash-features">
+            <div class="feature-item">
+                <i class="fas fa-lock"></i>
+                End-To-End Encrypted
+            </div>
+            <div class="feature-item">
+                <i class="fas fa-network-wired"></i>
+                Secure Decentralized Network
+            </div>
+            <!-- <div class="feature-item">
+                <i class="fas fa-shield-alt"></i>
+                Privacy First
+            </div> -->
+        </div>
+        <div class="powered-by">Powered By TrustGrid™</div>
+    </div>
     <div id="app">
         <!-- Main Interface -->
         <div class="main-screen">
